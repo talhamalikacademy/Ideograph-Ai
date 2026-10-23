@@ -133,8 +133,14 @@ export const isRetryableClassification = (kind: ErrorClassification): boolean =>
 
 export const isModelFallbackEligible = (error: unknown): boolean => {
   const kind = classifyError(error);
-  if (kind === 'invalid_api_key') return false;
-  if (kind === 'model_unavailable' || kind === 'unsupported_combination' || kind === 'bad_request') {
+  if (kind === 'invalid_api_key' || kind === 'safety_block') return false;
+  if (
+    kind === 'model_unavailable' ||
+    kind === 'unsupported_combination' ||
+    kind === 'bad_request' ||
+    kind === 'quota_exhausted' ||
+    kind === 'rate_limit'
+  ) {
     return true;
   }
   const msg = String((error as any)?.message || error || '').toLowerCase();
@@ -143,7 +149,9 @@ export const isModelFallbackEligible = (error: unknown): boolean => {
     msg.includes('not found') ||
     msg.includes('not supported') ||
     msg.includes('permission') ||
-    msg.includes('invalid argument')
+    msg.includes('invalid argument') ||
+    msg.includes('quota') ||
+    msg.includes('limit: 0')
   );
 };
 

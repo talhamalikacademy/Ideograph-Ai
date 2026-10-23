@@ -1092,7 +1092,8 @@ export const enforcePureUrduScriptNoLatinLeak = (text: string): string => {
 
 /**
  * Post-generation anti-plagiarism guard: strips any accidentally leaked hook lines
- * from "The DARK Side of ChatGPT" WITHOUT overwriting Scene 1 with a hardcoded 2030 AI sentence.
+ * from past reference videos ("The DARK Side of ChatGPT" or "November 2022 OpenAI 5-day 10 lakh Netflix/Facebook record")
+ * when those past-video facts were not requested in the user's topic.
  */
 export const sanitizePlagiarizedHookSentences = (
   text: string,
@@ -1101,19 +1102,29 @@ export const sanitizePlagiarizedHookSentences = (
 ): string => {
   if (!text) return "";
   const lowerTopic = (userTopic || "").toLowerCase();
-  if (lowerTopic.includes("dark side of chatgpt") || lowerTopic.includes("khokhla")) {
-    return text;
-  }
 
   let cleaned = text;
 
-  const nastaliqHookRegex =
-    /(?:اے آئی|AI)\s*آپ کے دماغ کو دھیرے دھیرے کھوکھلا کیے جا رہا ہے[^۔.؟!]*[۔.؟!]?\s*(?:جتنا زیادہ آپ\s*(?:چیٹ جی پی ٹی|ChatGPT)\s*کا استعمال کر رہے ہو[^۔.؟!]*[۔.؟!]?)?/gi;
-  cleaned = cleaned.replace(nastaliqHookRegex, "").trim();
+  if (!lowerTopic.includes("dark side of chatgpt") && !lowerTopic.includes("khokhla")) {
+    const nastaliqHookRegex =
+      /(?:اے آئی|AI)\s*آپ کے دماغ کو دھیرے دھیرے کھوکھلا کیے جا رہا ہے[^۔.؟!]*[۔.؟!]?\s*(?:جتنا زیادہ آپ\s*(?:چیٹ جی پی ٹی|ChatGPT)\s*کا استعمال کر رہے ہو[^۔.؟!]*[۔.؟!]?)?/gi;
+    cleaned = cleaned.replace(nastaliqHookRegex, "").trim();
 
-  const romanHookRegex =
-    /AI aapke dimagh ko dheere-dheere khokhla kiye ja raha hai[^.?!]*[.?!]?\s*(?:Jitna zyada aap ChatGPT ka istemal kar rahe ho[^.?!]*[.?!]?)?/gi;
-  cleaned = cleaned.replace(romanHookRegex, "").trim();
+    const romanHookRegex =
+      /AI aapke dimagh ko dheere-dheere khokhla kiye ja raha hai[^.?!]*[.?!]?\s*(?:Jitna zyada aap ChatGPT ka istemal kar rahe ho[^.?!]*[.?!]?)?/gi;
+    cleaned = cleaned.replace(romanHookRegex, "").trim();
+  }
+
+  // Strip leaked Video #2 ("30 نومبر 2022 کو جب اوپن اے آئی... صرف پانچ دنوں کے اندر اس سسٹم سے 10 لاکھ... نیٹ فلکس اور فیس بک...") hook sentences if user topic didn't ask for 2022 or Netflix
+  if (!lowerTopic.includes("2022") && !lowerTopic.includes("netflix")) {
+    const nov2022UrduRegex =
+      /(?:30\s*)?نومبر\s*2022\s*کو\s*جب\s*اوپن\s*اے\s*آئی[^۔.؟!]*[۔.؟!]?\s*(?:صرف\s*پانچ\s*دنوں\s*کے\s*اندر[^۔.؟!]*نیٹ\s*فلکس[^۔.؟!]*[۔.؟!]?)?/gi;
+    cleaned = cleaned.replace(nov2022UrduRegex, "").trim();
+
+    const fiveDaysRecordUrduRegex =
+      /صرف\s*پانچ\s*دنوں\s*کے\s*اندر\s*(?:اس\s*سسٹم|چیٹ\s*جی\s*پی\s*ٹی)[^۔.؟!]*نیٹ\s*فلکس[^۔.؟!]*[۔.؟!]?/gi;
+    cleaned = cleaned.replace(fiveDaysRecordUrduRegex, "").trim();
+  }
 
   return cleaned || text;
 };
@@ -1154,7 +1165,12 @@ export const sanitizeCreatorVocabulary = (
   sanitized = sanitized.replace(/অভিশাপ/g, "تباہی");
 
   // Strip plagiarized opening hook sentences if leaked in Scene 1
-  if (isFirstScene || sanitized.includes("کھوکھلا کیے جا رہا ہے") || /khokhla kiye ja raha hai/i.test(sanitized)) {
+  if (
+    isFirstScene ||
+    sanitized.includes("کھوکھلا کیے جا رہا ہے") ||
+    /khokhla kiye ja raha hai/i.test(sanitized) ||
+    (sanitized.includes("نومبر 2022") && sanitized.includes("نیٹ فلکس"))
+  ) {
     sanitized = sanitizePlagiarizedHookSentences(sanitized, userTopic, isPureUrdu);
   }
 

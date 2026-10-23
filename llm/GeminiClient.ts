@@ -162,32 +162,57 @@ export class GeminiClient implements LLMClient {
     const validAspectRatios = ["16:9", "9:16", "1:1", "4:3", "3:4"];
     const ratio = call.aspectRatio && validAspectRatios.includes(call.aspectRatio) ? call.aspectRatio : undefined;
 
+    const extractImageFromResponse = (response: GenerateContentResponse): string | null => {
+      const parts = response.candidates?.[0]?.content?.parts;
+      if (parts) {
+        for (const part of parts) {
+          if (part.inlineData && part.inlineData.data) {
+            return `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`;
+          }
+        }
+      }
+      return null;
+    };
+
     return retryWithBackoff(
       async () => {
         const { result, modelUsed } = await routeWithModelFallback(models, async model => {
-          const response = await this.genAI.models.generateContent({
-            model,
-            contents: { parts: [{ text: call.prompt }] },
-            ...(ratio
-              ? {
-                  config: {
-                    imageConfig: { aspectRatio: ratio },
-                    ...(call.signal ? { abortSignal: call.signal } : {})
+          try {
+            const response = await this.genAI.models.generateContent({
+              model,
+              contents: { parts: [{ text: call.prompt }] },
+              ...(ratio
+                ? {
+                    config: {
+                      imageConfig: { aspectRatio: ratio },
+                      ...(call.signal ? { abortSignal: call.signal } : {})
+                    }
                   }
-                }
-              : call.signal
-                ? { config: { abortSignal: call.signal } }
-                : {})
-          });
+                : call.signal
+                  ? { config: { abortSignal: call.signal } }
+                  : {})
+            });
 
-          const parts = response.candidates?.[0]?.content?.parts;
-          if (parts) {
-            for (const part of parts) {
-              if (part.inlineData && part.inlineData.data) {
-                return `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`;
-              }
+            const extracted = extractImageFromResponse(response);
+            if (extracted) return extracted;
+          } catch (firstErr: unknown) {
+            const msg = String((firstErr as any)?.message || firstErr || "").toLowerCase();
+            // If the model rejected `imageConfig` or required explicit `responseModalities`, retry with responseModalities
+            if (msg.includes("imageconfig") || msg.includes("modality") || msg.includes("invalid_argument") || msg.includes("400")) {
+              const fallbackRes = await this.genAI.models.generateContent({
+                model,
+                contents: { parts: [{ text: ratio ? `${call.prompt} (Aspect ratio: ${ratio})` : call.prompt }] },
+                config: {
+                  responseModalities: ["TEXT", "IMAGE"],
+                  ...(call.signal ? { abortSignal: call.signal } : {})
+                }
+              });
+              const extractedFallback = extractImageFromResponse(fallbackRes);
+              if (extractedFallback) return extractedFallback;
             }
+            throw firstErr;
           }
+
           throw toFriendlyLLMError(new Error("No image generated."));
         });
         return { dataUrl: result, modelUsed };

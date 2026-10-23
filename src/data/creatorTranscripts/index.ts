@@ -351,12 +351,49 @@ export const matchCreatorSubGenreAndTranscript = (
 export const buildAntiPlagiarismDirective = (userTopic: string = ""): string => {
   const cleanTopic = (userTopic || "the user's specific topic").trim().slice(0, 300);
   return `
-### CRITICAL LAW: ZERO TRANSCRIPT PLAGIARISM (ABSTRACT STYLE TRANSFER ONLY)
-Reference transcripts exist ONLY to calibrate vocal cadence (12 to 18 words per sentence), conversational register, and transition bridges:
-1. NEVER copy, paraphrase, or recycle sentences, hooks, case studies, or analogies from reference transcripts.
-2. Your VERY FIRST SENTENCE (00:00) MUST be 100% original and lock directly onto the user's exact topic, entities, and timeframe: "${cleanTopic}".
-3. Every analogy, statistic, and example in your script must be invented strictly for "${cleanTopic}".
+### CRITICAL LAW: ZERO TRANSCRIPT PLAGIARISM (ABSTRACT STYLE & RHYTHM TRANSFER ONLY)
+Reference transcripts exist ONLY to calibrate vocal cadence (12 to 18 words per sentence), conversational register, rhythmic parallel clauses, and transition bridges:
+1. NEVER copy, paraphrase, or recycle sentences, opening hooks, dates, case studies, or analogies from reference transcripts.
+2. NEVER start a script with past-video hooks or facts (such as the November 2022 OpenAI release date, reaching 1 million / 10 lakh users in 5 days compared to Netflix and Facebook, writing poems and coding vs Google Search, the 10-year phone number memory test, or MIT 54-participant essay tests) UNLESS the user explicitly asked for those exact historical facts inside "${cleanTopic}".
+3. Your VERY FIRST SENTENCE (00:00) MUST be 100% original and lock directly onto the user's exact topic, entities, and timeframe: "${cleanTopic}".
+4. Every analogy, statistic, and example in your script must be invented strictly for "${cleanTopic}". Never output literal bracketed mask tokens like [PAST_VIDEO_DATE] or [PAST_VIDEO_METRIC] in your final script.
 `.trim();
+};
+
+/**
+ * Masks past-video specific dates, numbers, and case-study nouns when projecting a reference
+ * transcript into the LLM prompt so the model absorbs 100% of the creator's spoken cadence,
+ * connectors, and rhythmic parallel sentence structures WITHOUT copying past video facts into the Hook.
+ * (Note: The underlying transcript files `dhruv_rathee.js` and `thynkwhy.js` remain 100% verbatim and untouched.)
+ */
+const maskPastVideoTopicFactsForStyleReading = (
+  rawTranscript: string,
+  userTopic: string = ""
+): string => {
+  if (!rawTranscript) return "";
+  const lowerTopic = (userTopic || "").toLowerCase();
+  let masked = rawTranscript;
+
+  // Mask November 2022 / 5-day 1 million (10 lakh) Netflix/Facebook record unless user topic explicitly asks for 2022 ChatGPT launch history
+  if (!lowerTopic.includes("2022") && !lowerTopic.includes("netflix")) {
+    masked = masked
+      .replace(/نومبر\s*2022/g, "[ماضی کی تاریخ]")
+      .replace(/November\s*2022/gi, "[PAST_DATE]")
+      .replace(/دس لاکھ صارفین تک پہنچنے میں نیٹ فلکس کو ساڑھے تین سال لگے تھے، فیس بک کو دس مہینے اور انسٹاگرام کو ڈھائی مہینے لگے تھے—لیکن چیٹ جی پی ٹی نے صرف پانچ دنوں کے اندر دس لاکھ صارفین کا ہدف پورا کر لیا!/g, "[پلیٹ فارم اے کو یہ ہدف پورا کرنے میں سالوں لگے تھے، لیکن اس نئے سسٹم نے صرف چند دنوں کے اندر ریکارڈ توڑ دیا!]")
+      .replace(/1 million users tak pahunchne mein Netflix ko 3\.5 saal ka samay laga tha, Facebook ko 10 mahine lage the, Instagram ko 2\.5 mahine lage the—lekin ChatGPT ne yeh 1 million users ka benchmark sirf aur sirf 5 dino mein cross kar diya!/gi, "[Platform A ko is benchmark tak pahunchne mein saalon lage the—lekin is naye system ne yeh record kuch hi dino mein cross kar diya!]")
+      .replace(/while reaching one million active users required three and a half years for Netflix, ten months for Facebook, and two and a half months for Instagram, ChatGPT achieved that exact benchmark in precisely five days\./gi, "[while reaching that benchmark required years for legacy platforms, this system achieved that exact milestone in record time.]");
+  }
+
+  // Mask 10-year phone-number memory opening test unless user topic explicitly mentions phone numbers
+  if (!lowerTopic.includes("phone number") && !lowerTopic.includes("فون نمبر")) {
+    masked = masked
+      .replace(/AI آپ کے دماغ کو دھیرے دھیرے کھوکھلا کیے جا رہا ہے۔/g, "[موجودہ ٹاپک کا پہلا تیز اور چونکا دینے والا دعویٰ]۔")
+      .replace(/AI aapke dimagh ko dheere-dheere khokhla kiye ja raha hai\./gi, "[User topic ka pehla sharp aur bold claim].")
+      .replace(/AI is slowly hollowing out your brain\./gi, "[ Sharp opening claim directly on the user's topic ].")
+      .replace(/آج سے قریب 10 سال پہلے یاد کر کے دیکھو دوستو—آپ کو کتنے فون نمبرز زبانی یاد تھے؟[^!]+!/g, "آج سے کچھ سال پہلے کا موازنہ کر کے دیکھو دوستو—[روزمرہ زندگی کی تبدیلی کی مثال]!");
+  }
+
+  return masked;
 };
 
 /**
@@ -481,7 +518,8 @@ export const compileCreatorTranscriptAndSubGenreBlock = (options: {
         return [
           `--- [DHRUV RATHEE GENRE VIDEO #${idx + 1}: "${video.videoTitle}" | Selected Language Stream: ${activeTranscriptFieldLabel}] ---`,
           `[Genre Tag]: ${video.genreTag} | [Tone & Aggression]: ${video.aggressionScore}`,
-          activeLanguageTranscript
+          `[WARNING — STYLE, RHYTHM & CONNECTOR REFERENCE ONLY: Do NOT copy any facts, dates, or case studies from this reference video into "${userTopic}"]`,
+          maskPastVideoTopicFactsForStyleReading(activeLanguageTranscript, userTopic)
         ].join("\n");
       })
       .join("\n\n");
@@ -525,7 +563,7 @@ ${languageSpecificConnectorsBlock}
 
 ${STEP_BY_STEP_CREATOR_SCRIPT_ALGORITHM}
 
-4. SELECTED GENRE TRANSCRIPTS IN ACTIVE LANGUAGE (${activeTranscriptFieldLabel}) — READ FOR VOCAL CADENCE, FORENSIC TIMELINE FLOW & TRANSITION STYLE ONLY (NEVER COPY PAST VIDEO TOPICS, NAMES, OR SENTENCES VERBATIM; WRITE 100% FOR "${userTopic}"):
+4. SELECTED GENRE TRANSCRIPTS IN ACTIVE LANGUAGE (${activeTranscriptFieldLabel}) — READ FOR VOCAL CADENCE, FORENSIC TIMELINE FLOW & TRANSITION STYLE ONLY (NEVER COPY PAST VIDEO TOPICS, DATES, NAMES, OR SENTENCES VERBATIM; WRITE 100% FOR "${userTopic}"):
 ${selectedLanguageGenreTranscriptsBlock}
 ===============================================================================
 `.trim();
@@ -561,7 +599,8 @@ ${selectedLanguageGenreTranscriptsBlock}
         return [
           `--- [THYNKWHY GENRE VIDEO #${idx + 1}: "${video.videoTitle}" | Selected Language Stream: ${activeTranscriptFieldLabel}] ---`,
           `[Genre Tag]: ${video.genreTag} | [Tone & Gravitas]: ${video.aggressionScore}`,
-          activeLanguageTranscript
+          `[WARNING — RHYTHMIC WORD-BLENDING & PARALLEL CLAUSE REFERENCE ONLY: Do NOT copy past video facts or names verbatim into "${userTopic}"]`,
+          maskPastVideoTopicFactsForStyleReading(activeLanguageTranscript, userTopic)
         ].join("\n");
       })
       .join("\n\n");

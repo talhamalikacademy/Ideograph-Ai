@@ -11,9 +11,24 @@ export const MODELS = {
   text: ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-flash-latest"],
   script: ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-flash-latest"],
   analysis: ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-flash-latest"],
-  imageHQ: ["gemini-2.5-flash-image", "gemini-3-pro-image-preview"],
-  imageFast: ["gemini-2.5-flash-image"],
-  audio: ["gemini-2.5-flash-preview-tts"]
+  imageHQ: [
+    "gemini-nano-banana-2.1",
+    "gemini-3.1-flash-lite-image",
+    "gemini-2.5-flash-image",
+    "gemini-3-pro-image",
+    "gemini-3-pro-image-preview"
+  ],
+  imageFast: [
+    "gemini-3.1-flash-lite-image",
+    "gemini-2.5-flash-image",
+    "gemini-nano-banana-2.1",
+    "gemini-3-pro-image-preview"
+  ],
+  audio: [
+    "gemini-3.8-flash-tts",
+    "gemini-3.8-flash-lite-tts",
+    "gemini-2.5-flash-preview-tts"
+  ]
 };
 
 export async function callWithModelFallback<T>(
