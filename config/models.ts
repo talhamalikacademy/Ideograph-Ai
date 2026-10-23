@@ -1,0 +1,41 @@
+import {
+  type ErrorClassification,
+  classifyError,
+  isModelFallbackEligible
+} from "../llm/errors";
+
+export type { ErrorClassification };
+export { classifyError, isModelFallbackEligible };
+
+export const MODELS = {
+  text: ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-flash-latest"],
+  script: ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-flash-latest"],
+  analysis: ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-flash-latest"],
+  imageHQ: ["gemini-2.5-flash-image", "gemini-3-pro-image-preview"],
+  imageFast: ["gemini-2.5-flash-image"],
+  audio: ["gemini-2.5-flash-preview-tts"]
+};
+
+export async function callWithModelFallback<T>(
+  models: string[],
+  run: (model: string) => Promise<T>
+): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    try {
+      return await run(model);
+    } catch (error: unknown) {
+      lastError = error;
+      if (i < models.length - 1 && isModelFallbackEligible(error)) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `[ModelFallback] Model "${model}" unavailable or unsupported (${errMsg}). Falling back to "${models[i + 1]}"...`
+        );
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}

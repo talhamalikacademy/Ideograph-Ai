@@ -1,0 +1,86 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ideograph</title>
+    <script>
+      // Prevent browser extensions from throwing "Cannot set property fetch of #<Window> which has only a getter"
+      try {
+        var fetchDesc = Object.getOwnPropertyDescriptor(window, 'fetch') || Object.getOwnPropertyDescriptor(Window.prototype, 'fetch');
+        if (fetchDesc && fetchDesc.configurable && !fetchDesc.set) {
+          var _fetch = window.fetch.bind(window);
+          Object.defineProperty(window, 'fetch', {
+            configurable: true,
+            enumerable: true,
+            get: function() { return _fetch; },
+            set: function(v) { if (typeof v === 'function') _fetch = v; }
+          });
+        }
+      } catch (e) {}
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Nastaliq+Urdu:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      /* Jameel Noori Nastaliq Font Face */
+      @font-face {
+        font-family: 'Jameel Noori Nastaliq';
+        src: url('https://cdn.jsdelivr.net/gh/lateefv/webfonts@master/JameelNooriNastaliq.ttf') format('truetype');
+        font-display: swap;
+      }
+
+      body {
+        font-family: 'Poppins', sans-serif;
+        background-color: #f8fafc;
+        color: #0f172a;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #334155; 
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
+         background: #475569;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Poppins', 'sans-serif'],
+              display: ['Poppins', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+              urdu: ['"Noto Nastaliq Urdu"', 'serif'],
+              jameel: ['"Jameel Noori Nastaliq"', '"Noto Nastaliq Urdu"', 'serif'],
+            },
+            colors: {
+              charcoal: '#020617', // Slate 950
+              panel: '#0f172a',    // Slate 900
+            }
+          }
+        }
+      }
+    </script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
