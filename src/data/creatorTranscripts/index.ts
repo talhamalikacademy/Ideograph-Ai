@@ -20,7 +20,23 @@ import {
   THYNKWHY_MILITARY_GEOPOLITICS_NARRATIVE_WARFARE_VERBATIM,
   matchThynkWhySubGenreAndTranscript
 } from "./thynkwhy.js";
+import {
+  RAFTAR_SUB_GENRE_BLUEPRINTS,
+  RAFTAR_GENRE_HIERARCHY,
+  RAFTAR_TRANSCRIPTS,
+  RAFTAR_STEP_BY_STEP_SCRIPT_ALGORITHM,
+  RAFTAR_UNIVERSAL_SPOKEN_WORD_BANK,
+  RAFTAR_SULTANAT_E_ZARDARIYA_VERBATIM,
+  matchRaftarSubGenreAndTranscript
+} from "./raftar.js";
 import { OTHER_CREATOR_TRANSCRIPT_PACKS } from "./other_creators.js";
+import {
+  getCreatorAlgorithmDirective,
+  THYNKWHY_RHYTHMIC_CADENCE_PATTERNS,
+  buildThynkWhyDeepRhythmicAlgoBlock,
+  buildDhruvRatheeDedicatedAlgoBlock,
+  buildOtherCreatorDedicatedAlgoBlock
+} from "../creatorAlgos";
 
 export interface SubGenreBlueprintCard {
   id: string;
@@ -116,9 +132,21 @@ export {
   THYNKWHY_MUAZZAM_SHAH_MANIFESTO_VERBATIM,
   THYNKWHY_DIGITAL_HEERA_MANDI_EXPOSE_VERBATIM,
   THYNKWHY_MILITARY_GEOPOLITICS_NARRATIVE_WARFARE_VERBATIM,
+  RAFTAR_SUB_GENRE_BLUEPRINTS,
+  RAFTAR_GENRE_HIERARCHY,
+  RAFTAR_TRANSCRIPTS,
+  RAFTAR_STEP_BY_STEP_SCRIPT_ALGORITHM,
+  RAFTAR_UNIVERSAL_SPOKEN_WORD_BANK,
+  RAFTAR_SULTANAT_E_ZARDARIYA_VERBATIM,
   OTHER_CREATOR_TRANSCRIPT_PACKS,
   matchDhruvSubGenreAndTranscript,
-  matchThynkWhySubGenreAndTranscript
+  matchThynkWhySubGenreAndTranscript,
+  matchRaftarSubGenreAndTranscript,
+  getCreatorAlgorithmDirective,
+  THYNKWHY_RHYTHMIC_CADENCE_PATTERNS,
+  buildThynkWhyDeepRhythmicAlgoBlock,
+  buildDhruvRatheeDedicatedAlgoBlock,
+  buildOtherCreatorDedicatedAlgoBlock
 };
 
 /**
@@ -166,20 +194,30 @@ export const isThynkWhyCreator = (
 };
 
 /**
- * Returns true when the active creator has a dedicated 5-Genre Hierarchy step in the UI
- * (Dhruv Rathee or ThynkWhy).
+ * Returns true ONLY when the active creator is Raftar TV.
+ */
+export const isRaftarCreator = (
+  creatorOrId?: CreatorProfile | string | null
+): boolean => {
+  return normalizeCreatorTranscriptKey(creatorOrId) === "raftar";
+};
+
+/**
+ * Returns true when the active creator has a dedicated Genre Hierarchy step in the UI
+ * (Dhruv Rathee's 5 Genres, ThynkWhy's 5 Genres, or Raftar TV's 6 Genres).
  */
 export const hasCreatorGenreHierarchy = (
   creatorOrId?: CreatorProfile | string | null
 ): boolean => {
   const key = normalizeCreatorTranscriptKey(creatorOrId);
-  return key === "dhruvrathee" || key === "thynkwhy";
+  return key === "dhruvrathee" || key === "thynkwhy" || key === "raftar";
 };
 
 /**
- * Returns the isolated 5 Genre Blueprint Cards for the active creator:
+ * Returns the isolated Genre Blueprint Cards for the active creator:
  * - Dhruv Rathee -> DHRUV_SUB_GENRE_BLUEPRINTS (Dhruv's 5 genres ONLY)
  * - ThynkWhy     -> THYNKWHY_SUB_GENRE_BLUEPRINTS (ThynkWhy's 5 genres ONLY)
+ * - Raftar TV    -> RAFTAR_SUB_GENRE_BLUEPRINTS (Raftar TV's 6 genres ONLY)
  * - Others       -> []
  */
 export const getSubGenreBlueprintsForCreator = (
@@ -191,6 +229,9 @@ export const getSubGenreBlueprintsForCreator = (
   }
   if (key === "thynkwhy") {
     return THYNKWHY_SUB_GENRE_BLUEPRINTS as SubGenreBlueprintCard[];
+  }
+  if (key === "raftar") {
+    return RAFTAR_SUB_GENRE_BLUEPRINTS as SubGenreBlueprintCard[];
   }
   return [];
 };
@@ -222,6 +263,19 @@ export const getThynkWhyGenreHierarchy = (
 };
 
 /**
+ * Returns the full 6-Genre -> Video Title -> [English, Hinglish, Urdu] Hierarchy
+ * for Raftar TV (or an empty array for other creators).
+ */
+export const getRaftarGenreHierarchy = (
+  creatorOrId?: CreatorProfile | string | null
+): DhruvGenreHierarchySection[] => {
+  if (!isRaftarCreator(creatorOrId)) {
+    return [];
+  }
+  return RAFTAR_GENRE_HIERARCHY as DhruvGenreHierarchySection[];
+};
+
+/**
  * Matches a user's topic (or explicit subGenreId override) to the active creator's
  * isolated Genre & Transcript Corpus.
  */
@@ -233,6 +287,7 @@ export const matchCreatorSubGenreAndTranscript = (
   creatorKey: string;
   isDhruv: boolean;
   isThynkWhy?: boolean;
+  isRaftar?: boolean;
   blueprint: SubGenreBlueprintCard;
   genreSection?: DhruvGenreHierarchySection;
   genreVideos?: DhruvGenreVideoEntry[];
@@ -247,6 +302,7 @@ export const matchCreatorSubGenreAndTranscript = (
       creatorKey: key,
       isDhruv: true,
       isThynkWhy: false,
+      isRaftar: false,
       blueprint: matched.blueprint as SubGenreBlueprintCard,
       genreSection: matched.genreSection as DhruvGenreHierarchySection,
       genreVideos: matched.genreVideos as DhruvGenreVideoEntry[],
@@ -261,11 +317,27 @@ export const matchCreatorSubGenreAndTranscript = (
       creatorKey: key,
       isDhruv: false,
       isThynkWhy: true,
+      isRaftar: false,
       blueprint: matched.blueprint as SubGenreBlueprintCard,
       genreSection: matched.genreSection as DhruvGenreHierarchySection,
       genreVideos: matched.genreVideos as DhruvGenreVideoEntry[],
       transcript: matched.transcript as CreatorTranscriptRecord,
       allBlueprints: THYNKWHY_SUB_GENRE_BLUEPRINTS as SubGenreBlueprintCard[]
+    };
+  }
+
+  if (key === "raftar") {
+    const matched = matchRaftarSubGenreAndTranscript(topic, explicitSubGenreId);
+    return {
+      creatorKey: key,
+      isDhruv: false,
+      isThynkWhy: false,
+      isRaftar: true,
+      blueprint: matched.blueprint as SubGenreBlueprintCard,
+      genreSection: matched.genreSection as DhruvGenreHierarchySection,
+      genreVideos: matched.genreVideos as DhruvGenreVideoEntry[],
+      transcript: matched.transcript as CreatorTranscriptRecord,
+      allBlueprints: RAFTAR_SUB_GENRE_BLUEPRINTS as SubGenreBlueprintCard[]
     };
   }
 
@@ -563,6 +635,12 @@ ${languageSpecificConnectorsBlock}
 
 ${STEP_BY_STEP_CREATOR_SCRIPT_ALGORITHM}
 
+${getCreatorAlgorithmDirective({
+  creator: options.creator,
+  topic: userTopic,
+  targetLanguage: lang
+})}
+
 4. SELECTED GENRE TRANSCRIPTS IN ACTIVE LANGUAGE (${activeTranscriptFieldLabel}) — READ FOR VOCAL CADENCE, FORENSIC TIMELINE FLOW & TRANSITION STYLE ONLY (NEVER COPY PAST VIDEO TOPICS, DATES, NAMES, OR SENTENCES VERBATIM; WRITE 100% FOR "${userTopic}"):
 ${selectedLanguageGenreTranscriptsBlock}
 ===============================================================================
@@ -622,42 +700,149 @@ ${selectedLanguageGenreTranscriptsBlock}
 
     return `
 ================================================================================
-[PILLAR 2: THYNKWHY (MUAZZAM SHAH) 5-GENRE RHYTHMIC & PARABLE DNA ENGINE]
+[PILLAR 2: THYNKWHY (MUAZZAM SHAH) 5-GENRE INVESTIGATIVE DOCUMENTARY & PHILOSOPHICAL DNA ENGINE]
 Active ThynkWhy Genre: [${genreTag.toUpperCase()}] (${blueprint.title}) | Target Language: ${lang} (${activeTranscriptFieldLabel})
 Genre Domain: ${blueprint.aggressionAndTone}
 Corpus Calibrated: ${extractedDna.corpusCount} Genre Videos (${extractedDna.corpusTitles.join(" | ")})
 ================================================================================
 ${antiPlagiarismBlock}
 
-1. THYNKWHY PARABLE, HISTORICAL-CONTRAST & MIRROR HOOK ARCHITECTURE (TAILORED 100% TO "${userTopic}"):
-   - [Beat 1 — Parable / Allegory or Historical-to-Modern Contrast Scene]: Open with a vivid historical/moral parable (تمثیلی آغاز — like the little sparrow over Nimrod's fire) OR a stark historical-to-modern contrast scene ("پہلے رقاصائیں کوٹھوں پر محفلیں سجاتی تھیں، اب کوٹھے صرف ایک کلک کے فاصلے پر آ چکے ہیں") anchored 100% on "${userTopic}".
-   - [Beat 2 — Personal Moral Agency or Interconnected Case Studies]: Pivot to a piercing self-accountability question ("کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟") OR weave 3 interconnected real-world case studies ("یہ سب کیسے ہو رہا ہے؟ اسے سمجھنے کے لیے تین کرداروں کی سچی کہانیوں کو دیکھنا ہوگا") strictly for "${userTopic}".
-   - [Beat 3 — Unraveling the 'Why' (کیوں کی کھوج)]: Contrast superficial noise ("میں ٹی وی چینلز والی ڈرامے بازی نہیں کروں گا۔ بولنا تو بعد کا مرحلہ ہے، اس سے پہلے سوچنا ضروری ہے کہ بولنا کیا ہے!") with the deeper truth and verified evidence ([CLAIM-1]).
+1. THYNKWHY 3-FORMULA STARTING HOOK ARCHITECTURE (TAILORED 100% TO "${userTopic}"):
+   - ThynkWhy starts are NEVER abstract poems or vague musings. Choose EXACTLY ONE of these 3 formulas derived directly from real transcripts:
+     * Formula A (Dated Incident / Historical Raid Cold Open): Open inside a concrete dated scene (e.g., General Zia-ul-Haq's grand operation in Lahore's Heera Mandi with people fleeing under curfew, or the furnace of Babylon) anchored 100% on "${userTopic}", then pivot: "پہلے یہ کوٹھوں پر محفلیں سجاتی تھیں، اب کوٹھے صرف ایک کلک کے فاصلے پر آ چکے ہیں!"
+     * Formula B (Sensational Media Quote vs. Street Reality Contrast): Open with sensational TV studio screaming anchor quotes, then contrast with street-level reality ("خوشی کی بات یہ ہے کہ... یہ آوازیں ٹی وی اسٹوڈیوز کی تھیں جن کے اینکرز ایئر کنڈیشنڈ اسٹوڈیوز میں بیٹھ کر گلا پھاڑ پھاڑ کر چیخ رہے تھے... مگر عین اسی لمحے اصل سڑکوں پر لوگ اطمینان سے چائے پی رہے تھے!").
+     * Formula C (Three Named Interconnected Case Studies): Introduce 3 real people of different ages/cities affected by this crisis (e.g., 16-year-old student Kajol in Chandigarh hospital, 21-year-old Sajid in hospital, Daphne in Vegas) and ask what common predatory system connects them.
+   - Hook Culmination Question: The hook MUST close with an inescapable question of personal agency or why:
+     "کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟ آپ کا نہیں معلوم، مگر میرے پاس اس سوال کا جواب ہے۔" / "Kya aaj hum apne hissay ka kaam kar rahe hain? Aapka nahi pata, magar mere paas is sawal ka jawab hai."
    - IMPORTANT: Never use Dhruv Rathee's greeting ("Namaskar dosto!"). Maintain ThynkWhy's high-gravitas (8.5–9/10), investigative, brotherly, and philosophical documentary voice.
 
-2. NON-CLINICAL RHYTHMIC & RHYMING PARALLEL CLAUSES (ہم قافیہ و ہم آہنگ جملے — EXCLUSIVE TO THYNKWHY):
-   - ZERO DRY CLINICAL SCIENCE JARGON: Do NOT write ThynkWhy like a laboratory biology/physics textbook. Instead of clinical jargon, ThynkWhy's signature power comes from **rhythmic, matching, and parallel clauses** where consecutive phrases rhyme or echo each other's cadence:
-     * Urdu Rhythm Pattern: "کہانیاں سنا کر زمانہ بدلنے آیا ہے، معاشرے کی منفی سوچ کو مثبت سوچ سے بدلنے آیا ہے۔ ہر ضروری معلومات آپ تک پہنچانے آیا ہے، سینہ بہ سینہ علم بڑھانے کا سلسلہ آپ سے جوڑنے آیا ہے۔"
-     * Urdu Parallel Triplet: "نہ پڑھائی کی محنت، نہ اچھے نمبر لانے کا دباؤ، اور نہ نوکری کے لیے ڈگری کی محتاجی!" ("Na padhai par focus karne ki zaroorat, na ache marks ka pressure, aur na naukri ke liye degree ki pareshani!")
-     * Urdu Contrast Rhythm: "بات ہوگی ڈنکے کی چوٹ پر، اور چوٹ لگنے پر تھوڑا درد تو ہوگا، مگر یقین مانیے مقصد درد پہنچانا نہیں بلکہ درد پر مرہم رکھنا اور معاشرہ سنوارنا ہے۔"
-     * Rhyming Couplet Cadence: "مگر آج یہ مقصد کہیں کھو گیا ہے، زندگی کا مقصد سو گیا ہے۔" ("Magar aaj yeh Why kahin kho gaya hai, zindagi ka maqsad so gaya hai.")
-     * Crescendo Question Cadence: "وہ سوال جو آپ کو غلط راستے پر جانے سے روک دے؛ وہ سوال جو آپ کو حق کی راہ پر گامزن کر دے؛ وہ سوال جو آپ کی فکر بدل دے اور نیا راستہ دکھائے!"
+2. STRICT ANTI-POETRY & ANTI-RHYME LAW (ZERO POETRY / ZERO RHYMING COUPLETS — EXCLUSIVE TO THYNKWHY):
+   - ABSOLUTE BAN ON POETRY: ThynkWhy (Muazzam Shah) is an investigative documentary filmmaker, NOT an Urdu poet. NEVER write rhyming poetry, couplets, ghazals, or song-like verses (ہم قافیہ شاعری یا اشعار قطعی ممنوع ہیں).
+   - Sentences must NOT end in matching rhyming words like a poem. Every factual, historical, and investigative sentence must be spoken naturally for the human ear.
+   - Conversational Spoken Brotherly Delivery: Blend literary Urdu depth with warm spoken brotherly cadence:
+     * "او بھائی، بولنا تو بعد کا مرحلہ ہے، اس سے پہلے سوچنا ضروری ہے کہ بولنا کیا ہے!" ("Oh bhai, bolna agla step hai! Us se pehle soch lo ke bolna kya hai!")
+     * "بات ہوگی ڈنکے کی چوٹ پر، اور چوٹ لگنے پر تھوڑا درد تو ہوگا، مگر یقین مانیے مقصد درد پہنچانا نہیں بلکہ درد پر مرہم رکھنا ہے!" ("Baat hogi danke ki chot par, aur chot lagne par thoda dard toh hoga yaar, magar yaqeen karein maqsad dard pohanchana nahi, dard par marham rakhna hai!")
+     * "تھوڑا سا غور کرو تو سمجھ آئے گا..." ("Thoda sa ghour karo toh samajh aayega...")
+     * "اپنے حصے کا کام..." ("Apne hissay ka kaam...")
+   - Connect Evidence to Real Books, Memoirs & Insider Testimonies:
+     Cite real memoirs (like Qudratullah Shahab's 'Shahab Nama'), official audit data, hospital statistics, or whistleblower confessions.
    - Measured Corpus Sentence Length: Average ${extractedDna.measuredAvgWordsPerSentence} words per sentence (12 to 18 words per sentence).
    - Signature Genre Pacing Mechanics: ${blueprint.signatureWordingAndPacing}
 
-3. THYNKWHY RHYTHMIC VOCABULARY & BLENDED PHRASE BANK:
+3. THYNKWHY AUTHENTIC ENDING VERDICTS (NOT A POEM!):
+   - Never close with a rhyming stanza. Close with a historical verdict on the predatory system or media deception, culminating in a piercing self-accountability question:
+     * Ending Verdict 1 (Historical Law & Society Awakening): "تاریخ کا ایک اٹل قانون ہے... جب کوئی قوم حقائق سے آنکھیں چرا کر اپنے ہی بنائے ہوئے جھوٹے بیانیے کے نشے میں مبتلا ہو جائے، تو اس کا غرور اسی طرح آسمان سے زمین پر آ گرتا ہے۔ سوال یہ ہے کہ کیا خطے کا میڈیا اور عوام اس جنگی جنون کے پیچھے چھپی سیاسی دوکانداری کو کبھی سمجھ پائیں گے؟ سوچیے گا ضرور!"
+     * Ending Verdict 2 (Critical Thinking & The Power of Why): "ضروری ہے کہ آپ کے اندر ایک سچی سوچ پیدا ہو، کیونکہ سوچ ہی سوال کو جنم دیتی ہے۔ وہ سوال جو آپ کو غلط راستے پر جانے سے روک دے؛ وہ سوال جو آپ کو حق کی راہ پر گامزن کر دے؛ وہ سوال جو آپ کی فکر بدل دے اور نیا راستہ دکھائے... اگلی دستاویزی فلم اس سے بھی زیادہ چونکا دینے والی ہوگی۔ تب تک کے لیے خدا حافظ!"
+     * Ending Verdict 3 (Personal Responsibility & Action): "یہ صرف کسی ایک فرد کا مسئلہ نہیں، یہ ہمارے گھروں کے اندر داخل ہو چکی وہ آگ ہے جسے ہم نے خود اسکرینوں کی صورت میں اپنے بچوں کے ہاتھ میں پکڑا دیا ہے۔ سوال یہ ہے کہ کیا ہم اب بھی خاموش تماشائی بنے رہیں گے یا اپنے حصے کا کام کریں گے؟ فیصلہ آپ کے ہاتھ میں ہے!"
+
+4. THYNKWHY VOCABULARY & SPOKEN CONNECTORS:
 ${thynkwhyConnectorsBlock}
 
 ${THYNKWHY_STEP_BY_STEP_SCRIPT_ALGORITHM}
 
-4. SELECTED GENRE TRANSCRIPTS IN ACTIVE LANGUAGE (${activeTranscriptFieldLabel}) — READ FOR RHYTHMIC WORD-BLENDING, PARALLEL CLAUSE FLOW & STORYTELLING CADENCE ONLY (NEVER COPY PAST VIDEO TOPICS, NAMES, OR SENTENCES VERBATIM; WRITE 100% FOR "${userTopic}"):
+${getCreatorAlgorithmDirective({
+  creator: options.creator,
+  topic: userTopic,
+  targetLanguage: lang
+})}
+
+5. SELECTED GENRE TRANSCRIPTS IN ACTIVE LANGUAGE (${activeTranscriptFieldLabel}) — READ FOR CONCRETE STARTING INCIDENTS, EVIDENCE CONNECTIONS, AND ENDING VERDICTS ONLY (NEVER WRITE POETRY; WRITE 100% FOR "${userTopic}"):
 ${selectedLanguageGenreTranscriptsBlock}
 ================================================================================
 `.trim();
   }
 
   // ==========================================================================
-  // CASE C: ALL OTHER CREATORS (NITISH, VERITASIUM, MRBEAST, HORMOZI, NAVAL, PETERSON, IMAN, SHARAN, RAFTAR)
+  // CASE C: RAFTAR TV SELECTED -> 6-GENRE HIERARCHY, ARYAN ZERO-REPETITION STANDARD & SELECTED-LANGUAGE TRANSCRIPT READER
+  // ==========================================================================
+  if (matched.isRaftar && matched.genreSection && matched.genreVideos?.length) {
+    const genreTag = matched.genreSection.genreTag;
+    const blueprint = matched.blueprint;
+    const videos = matched.genreVideos;
+
+    const extractedDna = extractAbstractGenreTranscriptDna(
+      videos,
+      isPureUrduScript,
+      isRomanOrHinglish
+    );
+
+    const activeTranscriptFieldLabel = isPureUrduScript
+      ? "urduTranscribe (Version 1: 100% Pure Urdu Nastaliq)"
+      : isRomanOrHinglish
+      ? "hinglishTranscribe (Version 2: Spoken Roman Urdu / Urdish)"
+      : "englishTranscribe (Version 3: Broadcast Standard English)";
+
+    const selectedLanguageGenreTranscriptsBlock = videos
+      .map((video, idx) => {
+        const activeLanguageTranscript = isPureUrduScript
+          ? video.urduTranscribe
+          : isRomanOrHinglish
+          ? video.hinglishTranscribe
+          : video.englishTranscribe;
+        return [
+          `--- [RAFTAR TV GENRE VIDEO #${idx + 1}: "${video.videoTitle}" | Selected Language Stream: ${activeTranscriptFieldLabel}] ---`,
+          `[Genre Tag]: ${video.genreTag} | [Tone & Gravitas]: ${video.aggressionScore}`,
+          `[WARNING — INVESTIGATIVE CADENCE & ARCHIVAL FLOW REFERENCE ONLY: Do NOT copy past video facts or sentences verbatim into "${userTopic}"]`,
+          maskPastVideoTopicFactsForStyleReading(activeLanguageTranscript, userTopic)
+        ].join("\n");
+      })
+      .join("\n\n");
+
+    const raftarConnectorsBlock = isPureUrduScript
+      ? `   • Allowed Raftar TV Investigative Urdu Connectors (100% Pure Urdu Nastaliq — Zero Latin Letters):
+     ${RAFTAR_UNIVERSAL_SPOKEN_WORD_BANK.urduConnectorsAndWords.map(w => `"${w}"`).join(" | ")}
+   • Genre-Specific Urdu Investigative Phrases ('${genreTag}'):
+     ${extractedDna.mergedUrduWords.map(w => `"${w}"`).join(" | ")}`
+      : isRomanOrHinglish
+      ? `   • Allowed Raftar TV Spoken Roman Urdu / Urdish Investigative Connectors:
+     ${RAFTAR_UNIVERSAL_SPOKEN_WORD_BANK.hinglishConnectorsAndWords.map(w => `"${w}"`).join(" | ")}
+   • Genre-Specific Roman Urdu / Urdish Phrases ('${genreTag}'):
+     ${extractedDna.mergedHinglishWords.map(w => `"${w}"`).join(" | ")}`
+      : `   • Allowed Raftar TV Broadcast English Documentary Connectors:
+     ${RAFTAR_UNIVERSAL_SPOKEN_WORD_BANK.englishConnectorsAndWords.map(w => `"${w}"`).join(" | ")}
+   • Genre-Specific English Phrases ('${genreTag}'):
+     ${extractedDna.mergedEnglishWords.map(w => `"${w}"`).join(" | ")}`;
+
+    return `
+================================================================================
+[PILLAR 2: RAFTAR TV (@raftartv) 6-GENRE INVESTIGATIVE & ARCHIVAL DNA ENGINE]
+Active Raftar TV Genre: [${genreTag.toUpperCase()}] (${blueprint.title}) | Target Language: ${lang} (${activeTranscriptFieldLabel})
+Genre Sub-Pillars: ${blueprint.aggressionAndTone}
+Corpus Calibrated: ${extractedDna.corpusCount} Genre Videos (${extractedDna.corpusTitles.join(" | ")})
+================================================================================
+${antiPlagiarismBlock}
+
+1. RAFTAR TV LITERARY PARABLE OR ARCHIVAL CHRONOLOGY HOOK (TAILORED 100% TO "${userTopic}"):
+   - [Beat 1 — Literary Parable or Dated Archival Scene]: Open with a haunting literary/historical parable (like Alif Laila's Tasemah-Pa / Old Man of the Sea, George Orwell's 1984, or the 1904 Clever Hans illusion) OR a dated archival flashpoint ("کہانی کی شروعات ہوتی ہے...") anchored 100% on "${userTopic}".
+   - [Beat 2 — Official Claim vs. Ground Reality]: Contrast the official state/corporate narrative with hard Pakistani/regional institutional numbers (PIDE, PBS, HRCP, P@SHA, NEPRA, KWSB, IMF) and Rupee economics ([CLAIM-1]).
+   - [Beat 3 — Follow-the-Money & Street Geography]: Name exact neighborhoods (Lyari, Kati Pahari, Orangi Town, Korangi, Clifton/DHA, Lahore, Constitution Avenue) and trace who profits from keeping the system broken.
+   - IMPORTANT: Never use Dhruv Rathee's greeting ("Namaskar dosto!"). Maintain Raftar TV's high-authority investigative newsroom documentary voice.
+
+2. ARYAN'S ANTI-FLUFF & ZERO-REPETITION STANDARD (OCTOBER 2026 RAFTAR TV BENCHMARK):
+   - ZERO GENERIC PHILOSOPHICAL FLUFF: Never write vague philosophical essays ("Script ke andar bohot si generic cheezein hain, koi khaas baat nahi hui").
+   - ZERO IDEA REPETITION: Never repeat the same idea in 4–5 differently worded sentences to pad length ("Ek hi baat ko lamba karne ke liye chaar-paanch jumlon mein repeat nahi karna"). Every 3 sentences MUST advance the investigation with a new dated event, report, Rupee figure, or named institutional actor.
+   - Measured Corpus Sentence Length: Average ${extractedDna.measuredAvgWordsPerSentence} words per sentence (12 to 18 words per sentence).
+   - Signature Genre Pacing Mechanics: ${blueprint.signatureWordingAndPacing}
+
+3. RAFTAR TV INVESTIGATIVE VOCABULARY & PHRASE BANK:
+${raftarConnectorsBlock}
+
+${RAFTAR_STEP_BY_STEP_SCRIPT_ALGORITHM}
+
+${getCreatorAlgorithmDirective({
+  creator: options.creator,
+  topic: userTopic,
+  targetLanguage: lang
+})}
+
+4. SELECTED GENRE TRANSCRIPTS IN ACTIVE LANGUAGE (${activeTranscriptFieldLabel}) — READ FOR ARCHIVAL PACING, FOLLOW-THE-MONEY STRUCTURE & CONNECTOR CADENCE ONLY (NEVER COPY PAST VIDEO TOPICS, NAMES, OR SENTENCES VERBATIM; WRITE 100% FOR "${userTopic}"):
+${selectedLanguageGenreTranscriptsBlock}
+================================================================================
+`.trim();
+  }
+
+  // ==========================================================================
+  // CASE D: ALL OTHER CREATORS (NITISH, VERITASIUM, MRBEAST, HORMOZI, NAVAL, PETERSON, IMAN, SHARAN)
   // ==========================================================================
   const { blueprint, transcript } = matched;
   const transitions = (transcript?.realTimeTransitions || []).join(" | ");
@@ -680,6 +865,12 @@ ${antiPlagiarismBlock}
 2. TOPIC-FIRST ANCHORING & CREATOR ISOLATION:
    - Sentence #1 and Sentence #2 at [00:00] MUST immediately anchor onto "${userTopic}" using ${creatorName}'s authentic opening style.
    - Do NOT use greetings or catchphrases belonging to other creators (never use "Namaskar dosto!" unless the creator is Dhruv Rathee).
+
+${getCreatorAlgorithmDirective({
+  creator: options.creator,
+  topic: userTopic,
+  targetLanguage: lang
+})}
 ================================================================================
 `.trim();
 };

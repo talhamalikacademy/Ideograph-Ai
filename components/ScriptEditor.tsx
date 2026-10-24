@@ -8,7 +8,11 @@ import {
   DirectorPlan,
   ExperimentVariant,
   VerifiedClaimOrPaperItem,
-  InfographicBlueprintItem
+  InfographicBlueprintItem,
+  ScriptClaimItem,
+  EvidenceInsertionSuggestion,
+  WrittenChapterResult,
+  HookLabVariant
 } from '../types';
 import {
   Video, Mic, Zap, Loader2, PlusCircle, Clock, Type, Sparkles, Wand2, Download, Undo2,
@@ -53,6 +57,15 @@ import {
 } from '../services/exportService';
 import { auditScriptStyleFidelity } from '../creator-intelligence/CreatorStyleLint';
 import { parseCanvasTextToSegments } from '../services/canvasService';
+import {
+  ChapterNavigator,
+  ProductionScriptTableView,
+  WorkspaceRightRail,
+  WorkspaceRightTab
+} from './workspace/WorkspacePanels';
+import { expandOrTrimChapter, buildProductionScript } from '../services/longFormService';
+import { getCreatorRecipeById } from '../creator-recipes';
+import { parseDurationToMinutes } from '../services/researchTargets';
 
 /* ──────────────────────────────────────────────────────────────
    Props
@@ -357,7 +370,47 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
   const heuristics = useMemo(() => calculateHeuristics(script), [script]);
   const styleReport = useMemo(() => auditScriptStyleFidelity(script, creator), [script, creator]);
   const langClass = useMemo(() => getLanguageClass(script.language), [script.language]);
-  const segments = script.segments || [];
+
+  // Workspace state for Long-Form Chapters, Claims, Post-Script Evidence, Hook Lab & Versions
+  const [showWorkspaceSuite, setShowWorkspaceSuite] = useState<boolean>(() =>
+    Boolean(script.writtenChapters?.length || script.dossier)
+  );
+  const [workspaceCenterView, setWorkspaceCenterView] = useState<'scenes' | 'production_table'>('scenes');
+  const [workspaceRightTab, setWorkspaceRightTab] = useState<WorkspaceRightTab>('claims');
+  const [activeChapterId, setActiveChapterId] = useState<string | null>(
+    script.writtenChapters?.[0]?.chapterId || null
+  );
+  const [expandingChapterId, setExpandingChapterId] = useState<string | null>(null);
+  const [isBuildingProdTable, setIsBuildingProdTable] = useState(false);
+  const [claimsList, setClaimsList] = useState<ScriptClaimItem[]>(script.claimsList || []);
+  const [evidenceSuggestions, setEvidenceSuggestions] = useState<EvidenceInsertionSuggestion[]>(
+    script.evidenceSuggestions || []
+  );
+  const [showVersionsMenu, setShowVersionsMenu] = useState(false);
+
+  const segments = useMemo(() => {
+    if (script.segments && script.segments.length > 0) return script.segments;
+    if (script.writtenChapters && script.writtenChapters.length > 0) {
+      const derived = [];
+      if (script.Hook) {
+        derived.push({
+          visual: 'Cold Open — Cinematic documentary hook & archival title card',
+          audio: script.Hook
+        });
+      }
+      script.writtenChapters.forEach(ch => {
+        derived.push({
+          visual: `Chapter ${ch.chapterNumber}: ${ch.title} — Documentary evidence & B-roll sequence`,
+          audio: ch.text
+        });
+      });
+      return derived;
+    }
+    if (script.script) {
+      return parseCanvasTextToSegments(script.script, []);
+    }
+    return [];
+  }, [script.segments, script.writtenChapters, script.Hook, script.script]);
 
   const activeTranslation = translations[selectedTargetLang];
   const isDualView = languageViewMode === 'dual' && Boolean(activeTranslation);
@@ -569,8 +622,74 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
     setShowExportMenu(false);
   };
 
+  const handleExportFactCheckLog = () => {
+    const lines = [
+      `# Fact-Check & Claim Audit Log: ${script.title || script.topic || 'Script'}`,
+      `Generated: ${new Date().toLocaleString()}`,
+      `Total Claims Audited: ${claimsList.length}`,
+      ''
+    ];
+    claimsList.forEach(c => {
+      lines.push(
+        `### [${c.id}] Chapter ${c.chapterNumber} — Status: ${c.status.toUpperCase()}${
+          c.editorReviewRequired ? ' (EDITOR REVIEW REQUIRED)' : ''
+        }`
+      );
+      lines.push(`- **Sentence:** "${c.sentenceText}"`);
+      if (c.matchedDossierFactId) lines.push(`- **Dossier Match:** [${c.matchedDossierFactId}]`);
+      if (c.sourceTitle) lines.push(`- **Source:** ${c.sourceTitle}${c.sourceUrl ? ` (${c.sourceUrl})` : ''}`);
+      lines.push('');
+    });
+    downloadTextFile(lines.join('\n'), `${exportBaseName()}_fact_check_log.md`, 'text/markdown;charset=utf-8');
+    setShowExportMenu(false);
+  };
+
+  const handleExportSourcesAppendix = () => {
+    const d = script.dossier;
+    const lines = [
+      `# Research Dossier & Sources Appendix: ${script.title || script.topic || 'Script'}`,
+      ''
+    ];
+    if (d) {
+      lines.push(`## Verified Facts (${d.facts.length})`);
+      d.facts.forEach(f => {
+        lines.push(`- **[${f.id}] (${f.type})** ${f.claim}${f.value ? ` — *${f.value}*` : ''} | Source: ${f.source.title}${f.source.url ? ` (${f.source.url})` : ''}`);
+      });
+      lines.push('', `## Books (${d.books.length})`);
+      d.books.forEach(b => {
+        lines.push(`- **[${b.id}]** *${b.title}* by ${b.author} (${b.sourceLevel}) — ${b.relevance}`);
+      });
+      lines.push('', `## Quotes (${d.quotes.length})`);
+      d.quotes.forEach(q => {
+        lines.push(`- **[${q.id}]** "${q.quote}" — ${q.speaker} (${q.source.title})`);
+      });
+    }
+    downloadTextFile(lines.join('\n'), `${exportBaseName()}_sources_appendix.md`, 'text/markdown;charset=utf-8');
+    setShowExportMenu(false);
+  };
+
+  const handleExportProductionTable = () => {
+    const rows = script.productionScriptRows || [];
+    const lines = [
+      `# Production Script (~2.3x): ${script.title || script.topic || 'Script'}`,
+      '',
+      '| Timestamp | Chapter | Spoken Voiceover | Visual & B-Roll Direction | On-Screen Text | Source Tag | Audio Mood |',
+      '|---|---|---|---|---|---|---|'
+    ];
+    rows.forEach(r => {
+      lines.push(
+        `| ${r.timestamp} | ${r.chapterTitle} | ${r.voiceover.replace(/\n/g, ' ')} | ${r.visualDirection} | ${r.onScreenText} | ${r.sourceTag} | ${r.audioMood} |`
+      );
+    });
+    downloadTextFile(lines.join('\n'), `${exportBaseName()}_production_script.md`, 'text/markdown;charset=utf-8');
+    setShowExportMenu(false);
+  };
+
   const downloadItems = [
-    { key: 'txt', icon: <FileText size={16} className="text-blue-500" />, title: 'Clean text file', desc: 'Plain text with scene cues', ext: '.TXT', onClick: handleExportText },
+    { key: 'txt', icon: <FileText size={16} className="text-blue-500" />, title: 'Voiceover / Clean text', desc: 'Plain text with scene cues', ext: '.TXT', onClick: handleExportText },
+    { key: 'prod', icon: <Film size={16} className="text-purple-500" />, title: 'Production script (~2.3x)', desc: 'Visuals, B-roll, on-screen text & audio', ext: '.MD', onClick: handleExportProductionTable },
+    { key: 'claims', icon: <ShieldCheck size={16} className="text-emerald-500" />, title: 'Fact-check log', desc: 'Claim audit statuses & sources', ext: '.MD', onClick: handleExportFactCheckLog },
+    { key: 'appendix', icon: <BookOpen size={16} className="text-amber-500" />, title: 'Sources appendix', desc: 'All dossier facts, books & quotes', ext: '.MD', onClick: handleExportSourcesAppendix },
     { key: 'pdf', icon: <Printer size={16} className="text-rose-500" />, title: 'PDF document', desc: 'Print or save styled script', ext: '.PDF', onClick: handleExportPdf },
     { key: 'doc', icon: <FileText size={16} className="text-indigo-500" />, title: 'Word document', desc: 'Formatted production table', ext: '.DOC', onClick: handleExportDocx },
     { key: 'md', icon: <FileCode size={16} className="text-emerald-500" />, title: 'Markdown', desc: 'Structured tables for Notion', ext: '.MD', onClick: handleExportMarkdown },
@@ -1003,6 +1122,60 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            {/* Workspace Suite Toggle (Chapters, Claims, Add Evidence, Hook Lab, Production 2.3x) */}
+            <ToolButton
+              icon={<ShieldCheck size={15} />}
+              label={showWorkspaceSuite ? 'Hide Studio Panels' : 'Claims, Hook Lab & 2.3x View'}
+              tone="indigo"
+              active={showWorkspaceSuite}
+              onClick={() => setShowWorkspaceSuite(v => !v)}
+              title="Toggle Chapter Navigator, Exhaustive Claim Check, Post-Script Evidence, Hook Lab & 2.3x Production Table"
+            />
+
+            {/* Versions History Dropdown */}
+            {script.versions && script.versions.length > 0 && (
+              <div className="relative">
+                <ToolButton
+                  icon={<Clock size={15} />}
+                  label={`Versions (${script.versions.length})`}
+                  tone="neutral"
+                  active={showVersionsMenu}
+                  onClick={() => setShowVersionsMenu(v => !v)}
+                  title="Restore a saved version snapshot"
+                />
+                {showVersionsMenu && (
+                  <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-white/10 dark:bg-[#162032]">
+                    <div className="px-2.5 py-1 text-xs font-bold text-slate-400">
+                      Saved Script Versions
+                    </div>
+                    {script.versions.map(ver => (
+                      <button
+                        key={ver.id}
+                        type="button"
+                        onClick={() => {
+                          const updatedSegs = parseCanvasTextToSegments(ver.scriptText, segments);
+                          onUpdateScript({
+                            ...script,
+                            script: ver.scriptText,
+                            segments: updatedSegs
+                          });
+                          setShowVersionsMenu(false);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 text-xs"
+                      >
+                        <div className="font-semibold text-slate-900 dark:text-white truncate">
+                          {ver.label}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {ver.wordCount} words • {new Date(ver.timestamp).toLocaleTimeString()}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <ToolButton
               icon={<Type size={15} />}
               label="Text style"
@@ -1315,6 +1488,253 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
           {showTypography && (
             <div className="sticky top-0 z-20">
               <TypographyPanel config={typography} setConfig={setTypography} />
+            </div>
+          )}
+
+          {/* ═════════ LONG-FORM WORKSPACE SUITE (CHAPTERS, 2.3x PRODUCTION SCRIPT, CLAIMS, ADD EVIDENCE, HOOK LAB) ═════════ */}
+          {showWorkspaceSuite && (
+            <div className="border-b border-slate-200 bg-slate-950/95 p-4 text-slate-100 dark:border-white/10">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceCenterView('scenes')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      workspaceCenterView === 'scenes'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-slate-900 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Voiceover Script View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceCenterView('production_table')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      workspaceCenterView === 'production_table'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-slate-900 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Production Script Table (~2.3x Words)
+                  </button>
+                </div>
+                <span className="text-xs text-slate-400">
+                  Use the right-hand tabs to audit Claims (~3/min), upload post-script Evidence, or test 3 Hook Lab openings.
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                {/* Left Rail: Chapter Navigator (if chapters exist) */}
+                {script.writtenChapters && script.writtenChapters.length > 0 && (
+                  <div className="lg:col-span-4">
+                    <ChapterNavigator
+                      chapters={script.writtenChapters}
+                      outline={script.chapterOutline || []}
+                      activeChapterId={activeChapterId}
+                      onSelectChapter={cid => setActiveChapterId(cid)}
+                      expandingChapterId={expandingChapterId}
+                      onExpandOrTrimChapter={async (chap, action) => {
+                        setExpandingChapterId(chap.chapterId);
+                        try {
+                          const outlineItem = (script.chapterOutline || []).find(
+                            o => o.id === chap.chapterId
+                          ) || {
+                            id: chap.chapterId,
+                            chapterNumber: chap.chapterNumber,
+                            title: chap.title,
+                            purpose: chap.summary2Lines,
+                            weightPct: 15,
+                            targetWords: chap.targetWords,
+                            assignedFactIds: chap.usedFactIds,
+                            assignedQuoteIds: chap.usedQuoteIds,
+                            assignedBookIds: chap.usedBookIds
+                          };
+                          const updatedChap = await expandOrTrimChapter({
+                            chapterResult: chap,
+                            chapterOutline: outlineItem,
+                            action,
+                            language: script.language || 'Roman Urdu',
+                            recipe: getCreatorRecipeById(creator.id),
+                            dossier: script.dossier || {
+                              topic: script.title,
+                              angle: script.title,
+                              durationMinutes: 15,
+                              targetWordCount: 2100,
+                              targetFactCount: 20,
+                              facts: [],
+                              quotes: [],
+                              books: [],
+                              gaps: []
+                            },
+                            apiKey
+                          });
+                          const nextChaps = (script.writtenChapters || []).map(c =>
+                            c.chapterId === chap.chapterId ? updatedChap : c
+                          );
+                          const nextScriptText = [
+                            `### [COLD OPEN HOOK]\n\n${script.Hook || ''}`,
+                            ...nextChaps.map(
+                              c => `### Chapter ${c.chapterNumber}: ${c.title}\n\n${c.text}`
+                            )
+                          ].join('\n\n---\n\n');
+                          onUpdateScript({
+                            ...script,
+                            script: nextScriptText,
+                            writtenChapters: nextChaps,
+                            versions: [
+                              {
+                                id: `VER-${Date.now()}`,
+                                label: `${action === 'expand' ? 'Expanded' : 'Trimmed'} Ch ${
+                                  chap.chapterNumber
+                                } (${updatedChap.wordCount}w)`,
+                                timestamp: Date.now(),
+                                scriptText: nextScriptText,
+                                wordCount: nextScriptText.split(/\s+/).length
+                              },
+                              ...(script.versions || [])
+                            ]
+                          });
+                        } finally {
+                          setExpandingChapterId(null);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Right Rail: Sources | Claims | Add Evidence | Hook Lab | Style Check */}
+                <div
+                  className={
+                    script.writtenChapters && script.writtenChapters.length > 0
+                      ? 'lg:col-span-8'
+                      : 'lg:col-span-12'
+                  }
+                >
+                  <WorkspaceRightRail
+                    activeTab={workspaceRightTab}
+                    onTabChange={setWorkspaceRightTab}
+                    scriptText={
+                      script.script ||
+                      segments.map(s => s.audio).join('\n\n')
+                    }
+                    onUpdateScriptText={(newText, versionLabel) => {
+                      const nextSegs = parseCanvasTextToSegments(newText, segments);
+                      onUpdateScript({
+                        ...script,
+                        script: newText,
+                        segments: nextSegs,
+                        versions: [
+                          {
+                            id: `VER-${Date.now()}`,
+                            label: versionLabel,
+                            timestamp: Date.now(),
+                            scriptText: newText,
+                            wordCount: newText.split(/\s+/).length
+                          },
+                          ...(script.versions || [])
+                        ]
+                      });
+                    }}
+                    dossier={script.dossier}
+                    onUpdateDossier={nextDossier =>
+                      onUpdateScript({ ...script, dossier: nextDossier })
+                    }
+                    chapters={script.writtenChapters}
+                    hookVariants={script.hookVariants}
+                    activeHookText={script.Hook}
+                    onSelectHookVariant={(variant: HookLabVariant) => {
+                      const nextScriptText = (script.script || '').replace(
+                        script.Hook || '',
+                        variant.text
+                      );
+                      onUpdateScript({
+                        ...script,
+                        Hook: variant.text,
+                        script: nextScriptText,
+                        activeHookVariantId: variant.id,
+                        versions: [
+                          {
+                            id: `VER-${Date.now()}`,
+                            label: `Switched Hook to ${variant.label}`,
+                            timestamp: Date.now(),
+                            scriptText: nextScriptText,
+                            wordCount: nextScriptText.split(/\s+/).length
+                          },
+                          ...(script.versions || [])
+                        ]
+                      });
+                    }}
+                    claims={claimsList}
+                    onUpdateClaims={nextClaims => {
+                      setClaimsList(nextClaims);
+                      onUpdateScript({ ...script, claimsList: nextClaims });
+                    }}
+                    evidenceSuggestions={evidenceSuggestions}
+                    onUpdateEvidenceSuggestions={nextSugs => {
+                      setEvidenceSuggestions(nextSugs);
+                      onUpdateScript({ ...script, evidenceSuggestions: nextSugs });
+                    }}
+                    openLoopsSummary={script.openLoopsSummary}
+                    recipe={getCreatorRecipeById(creator.id)}
+                    durationMinutes={parseDurationToMinutes(script.duration || '15 Minutes')}
+                    topic={script.topic || script.title || 'Documentary'}
+                    apiKey={apiKey}
+                  />
+                </div>
+              </div>
+
+              {workspaceCenterView === 'production_table' && (
+                <div className="mt-4">
+                  <ProductionScriptTableView
+                    rows={script.productionScriptRows || []}
+                    isGenerating={isBuildingProdTable}
+                    onGenerateProductionScript={async () => {
+                      setIsBuildingProdTable(true);
+                      try {
+                        const chaps: WrittenChapterResult[] =
+                          script.writtenChapters && script.writtenChapters.length > 0
+                            ? script.writtenChapters
+                            : segments.map((s, i) => ({
+                                chapterId: `CHAP-${i + 1}`,
+                                chapterNumber: i + 1,
+                                title: `Section ${i + 1}`,
+                                text: s.audio,
+                                wordCount: countWords(s.audio),
+                                targetWords: countWords(s.audio),
+                                summary2Lines: s.visual,
+                                usedFactIds: [],
+                                usedQuoteIds: [],
+                                usedBookIds: [],
+                                lengthStatus: 'on_target'
+                              }));
+                        const rows = await buildProductionScript({
+                          topic: script.topic || script.title || 'Documentary',
+                          language: script.language || 'Roman Urdu',
+                          hookText: script.Hook || segments[0]?.audio || '',
+                          chapterResults: chaps,
+                          dossier: script.dossier || {
+                            topic: script.title,
+                            angle: script.title,
+                            durationMinutes: 15,
+                            targetWordCount: 2100,
+                            targetFactCount: 20,
+                            facts: [],
+                            quotes: [],
+                            books: [],
+                            gaps: []
+                          },
+                          recipe: getCreatorRecipeById(creator.id),
+                          apiKey
+                        });
+                        onUpdateScript({ ...script, productionScriptRows: rows });
+                      } finally {
+                        setIsBuildingProdTable(false);
+                      }
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

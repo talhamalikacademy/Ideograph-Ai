@@ -17,10 +17,17 @@ export * from "./clipperService";
 export * from "./ttsAndCueService";
 export * from "./devilsAdvocateService";
 export * from "./exportService";
+export * from "./budget";
+export * from "./researchTargets";
+export * from "./sourceService";
+export * from "./researchService";
+export * from "./longFormService";
+export * from "./claimService";
 export {
   sanitizeCitationsWithGrounding,
   sanitizeCitationsFromSources,
   runGroundedJson
 } from "../llm/groundedJson";
+
 
 

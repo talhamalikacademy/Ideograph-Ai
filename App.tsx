@@ -16,7 +16,7 @@ import { resolveApiKey, getStoredApiKey, saveStoredApiKey } from './services/api
 import { saveScriptToHistory, getHistory, deleteScriptFromHistory, incrementDailyUsage } from './services/storageService';
 import clsx from 'clsx';
 
-const THEME_STORAGE_KEY = 'ideograph.theme';
+const THEME_STORAGE_KEY = 'ideograph.theme.v2';
 
 const getInitialDarkMode = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -27,9 +27,7 @@ const getInitialDarkMode = (): boolean => {
   } catch {
     // ignore storage errors
   }
-  return typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-color-scheme: dark)').matches
-    : false;
+  return false;
 };
 
 const App: React.FC = () => {
@@ -91,6 +89,8 @@ const App: React.FC = () => {
   // Unified Config State
   const [generatorConfig, setGeneratorConfig] = useState<GeneratorConfig>({
     topicOrScript: '',
+    shortTopic: '',
+    targetCriteria: '',
     duration: '60 Seconds (Shorts)',
     language: 'English',
     expertise: 'Beginner',
@@ -102,6 +102,17 @@ const App: React.FC = () => {
     blendConfig: {
         primaryCreatorId: CREATORS[0].id,
         secondaryCreatorIds: []
+    },
+    researchConfig: {
+      depth: 'deep_agency',
+      mode: 'full_agency_harvester',
+      region: 'India',
+      sources: {
+        booksAndHistoricalParables: true,
+        localPakistaniAndRegionalData: true,
+        redditAndCitizenGroundVoices: true,
+        globalStudiesAndCounterArguments: true
+      }
     }
   });
 
@@ -665,6 +676,19 @@ const App: React.FC = () => {
                         onOpenClipper={() => setView('clipper')}
                         onOpenArgumentChecker={() => setView('devilsAdvocate')}
                         onOpenTemplates={() => setView('templates')}
+                        onLongFormScriptComplete={(completedScript) => {
+                            const resolvedCreator =
+                                (completedScript.creatorId &&
+                                    CREATORS.find(
+                                        c => c.id === completedScript.creatorId || c.bio.id === completedScript.creatorId
+                                    )) ||
+                                selectedCreator;
+                            incrementDailyUsage();
+                            const saved = saveScriptToHistory(completedScript, resolvedCreator);
+                            setScript(saved);
+                            setHistory(getHistory());
+                            setAppState(AppState.READY);
+                        }}
                     />
                 )
             )}

@@ -31,6 +31,10 @@ export const MODELS = {
   ]
 };
 
+export const FAST_MODEL = MODELS.text[0] || "gemini-3-flash-preview";
+export const STRONG_MODEL = MODELS.script[0] || "gemini-3-flash-preview";
+
+
 export async function callWithModelFallback<T>(
   models: string[],
   run: (model: string) => Promise<T>

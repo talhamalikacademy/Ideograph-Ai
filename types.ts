@@ -160,6 +160,34 @@ export interface InfographicBlueprintItem {
   editorAnimationNotes: string;
 }
 
+export interface AgencyResearchDossier {
+  topicSummary: string;
+  bookAndParableAnchor: {
+    titleAndAuthor: string;
+    yearOrEra: string;
+    parableOrConceptSummary: string;
+    howToWeaveIntoScript: string;
+  }[];
+  localInstitutionalData: {
+    institutionOrReport: string;
+    keyStatisticOrPolicy: string;
+    rupeeOrEconomicBreakdown: string;
+    citiesAndNeighborhoods: string;
+  }[];
+  grassrootsAndRedditVoices: {
+    sourceCommunityOrPlatform: string;
+    livedCitizenExperience: string;
+    streetProverbOrQuote: string;
+  }[];
+  globalScientificBenchmarks: {
+    studyOrInstitution: string;
+    findingAndMechanism: string;
+    comparativeLesson: string;
+  }[];
+  nonRepetitiveFactPlan: string[];
+  groundedSources?: { title: string; uri: string }[];
+}
+
 export interface ResearchPayload {
   scriptTitle?: string;
   estimatedDurationMinutes?: number;
@@ -168,6 +196,7 @@ export interface ResearchPayload {
   claimsAndPapersRegistry: VerifiedClaimOrPaperItem[];
   infographicsBlueprint: InfographicBlueprintItem[];
   groundingChunks?: { title: string; uri: string }[];
+  agencyDossier?: AgencyResearchDossier;
 }
 
 export interface CreatorProfile {
@@ -330,6 +359,17 @@ export interface ScriptData extends ScriptPackage {
   // Dual / Multi-Language Support
   secondaryLanguage?: string;
   translations?: Record<string, TranslatedScriptVariant>;
+
+  // Research v2 & Long-Form Documentary Workspace Data
+  dossier?: Dossier;
+  beatPlan?: BeatPlanItem[];
+  qaReport?: ScriptQAReport;
+  chapterOutline?: ChapterOutlineItem[];
+  chapters?: WrittenChapterResult[];
+  hookVariants?: HookLabVariant[];
+  productionRows?: ProductionScriptRow[];
+  claimsCheck?: ScriptClaimItem[];
+  versions?: ScriptVersionSnapshot[];
 }
 
 export interface TranslatedScriptVariant {
@@ -402,9 +442,368 @@ export interface BlendConfig {
     secondaryCreatorIds: string[];
 }
 
+export type FactType =
+  | 'official_data'
+  | 'official_documents'
+  | 'news'
+  | 'books_history'
+  | 'global_studies'
+  | 'expert_views'
+  | 'public_voices'
+  | 'user_material'
+  | 'benchmarks'
+  | 'format_reference'
+  | 'feasibility_safety'
+  | 'audience_interest'
+  | 'stat'
+  | 'event'
+  | 'policy'
+  | 'study'
+  | 'book'
+  | 'quote'
+  | 'public_voice'
+  | 'counter'
+  | 'case'
+  | 'other_side';
+
+export type CardStatus = 'pending' | 'approved' | 'rejected' | 'pinned' | 'removed' | 'edited';
+
+export interface SourceRef {
+  id: string;
+  title: string;
+  publisher?: string;
+  author?: string;
+  year?: string;
+  url?: string;
+  domain?: string;
+  origin: 'web_grounded' | 'user_upload' | 'user_link' | 'user_paste' | 'books_api';
+  verified: boolean;
+}
+
+export interface FactCard {
+  id: string; // F1, F2...
+  type: FactType;
+  claim: string; // 1 clear sentence
+  statement?: string; // R3 alias for claim
+  value?: string; // exact number / % / amount / date
+  figure?: { value: string | number; unit?: string; year?: number };
+  date?: string;
+  location?: string; // only if mentioned in source
+  place?: string;
+  entities?: string[];
+  snippet: string; // <=25 words from source
+  evidenceText?: string;
+  source: SourceRef;
+  sourceTitle?: string;
+  sourceUrl?: string;
+  sourceDomain?: string;
+  sourceKind?: 'web' | 'user_file' | 'user_link' | 'user_paste' | 'book_text';
+  quote?: { text: string; page?: string; verified: boolean };
+  sub?: { credibility: number; novelty: number; storyValue: number; relevance: number };
+  score?: number;
+  strength?: 'strong' | 'ok' | 'weak';
+  stance?: 'supports' | 'counter' | 'context';
+  label?: 'unverified_voice' | 'opinion' | 'idea';
+  secondSourceUrl?: string;
+  questionIdx?: number[];
+  confidence: 'high' | 'medium' | 'low';
+  status: CardStatus;
+  conflictNote?: string;
+  editedByUser?: boolean;
+}
+
+export interface QuoteCard {
+  id: string; // Q1, Q2...
+  quote: string;
+  speaker: string;
+  workOrContext: string;
+  roleOrContext?: string;
+  year?: string;
+  page?: string;
+  usage: 'hook' | 'transition' | 'closing' | 'any' | 'evidence' | 'counter';
+  source: SourceRef;
+  verifiedExactText: boolean; // false = paraphrase only
+  status: CardStatus;
+}
+
+export interface BookRef {
+  id: string; // B1, B2...
+  title: string;
+  authors: string[];
+  author?: string;
+  year?: string;
+  description?: string;
+  coreIdeaForTopic: string;
+  relevance?: string;
+  previewLink?: string;
+  sourceLevel: 'metadata_only' | 'user_text';
+  excerptText?: string;
+  verifiedPassage?: string;
+  status: CardStatus;
+}
+
+export type BeatType =
+  | 'hook'
+  | 'context'
+  | 'cause'
+  | 'evidence'
+  | 'human story'
+  | 'other side'
+  | 'consequence'
+  | 'way forward'
+  | 'close';
+
+export interface BeatPlanItem {
+  id: string;
+  beatType: BeatType;
+  title: string;
+  summary: string;
+  estimatedSeconds: number;
+  cardIds: string[]; // e.g., ["F1", "B1", "Q2"]
+}
+
+export interface ScriptQAReport {
+  passed: boolean;
+  overallStatus: 'clean' | 'warnings' | 'needs_review';
+  factsUsedCount: number;
+  targetFactsCount: number;
+  factDensityWordsPerFact: number;
+  pinnedTotalCount: number;
+  pinnedUsedCount: number;
+  missingPinnedIds: string[];
+  unverifiedNumbersFound: string[];
+  needsDataMarkers: string[];
+  repeatedParagraphIndices: number[];
+  autoRewriteRoundsRun: number;
+  notes: string[];
+}
+
+export interface ChapterOutlineItem {
+  id: string;
+  chapterNumber: number;
+  title: string;
+  purpose: string;
+  weightPct?: number;
+  targetWords: number;
+  factIds?: string[];
+  assignedFactIds: string[];
+  assignedQuoteIds: string[];
+  assignedBookIds: string[];
+  loopsToOpen?: string[];
+  loopsToClose?: string[];
+  openLoopToPlant?: string;
+  openLoopToPayOff?: string;
+  transition?: string;
+  gapWarning?: string;
+}
+
+export interface WrittenChapterResult {
+  chapterId: string;
+  chapterNumber: number;
+  title: string;
+  text: string;
+  visualCue?: string;
+  wordCount: number;
+  targetWords: number;
+  factsUsed?: string[];
+  usedFactIds: string[];
+  usedQuoteIds: string[];
+  usedBookIds: string[];
+  loopsOpened?: string[];
+  loopsClosed?: string[];
+  plantedLoop?: string;
+  paidOffLoop?: string;
+  summary?: string;
+  summary2Lines: string;
+  lengthStatus: 'ok' | 'under_85' | 'over_115' | 'on_target' | 'under_budget' | 'over_budget';
+}
+
+export interface HookLabVariant {
+  id: string;
+  kind?: 'scene' | 'shocking_fact' | 'question';
+  style: 'scene' | 'shocking_fact' | 'question';
+  label: string;
+  visual?: string;
+  audio?: string;
+  text: string;
+  wordCount: number;
+  estimatedSeconds?: number;
+  openLoopQuestion: string;
+  payoffChapterNumber: number;
+}
+
+export interface ProductionScriptRow {
+  id: string;
+  chapterId?: string;
+  chapterNumber: number;
+  chapterTitle: string;
+  paragraphIndex?: number;
+  timestamp: string;
+  voiceover: string;
+  visualIdea?: string;
+  visualDirection: string;
+  bRoll?: string;
+  onScreenText: string;
+  sourceTag: string;
+  musicPaceCue?: string;
+  audioMood: string;
+}
+
+export type ClaimKind =
+  | 'number'
+  | 'date'
+  | 'event'
+  | 'causal'
+  | 'attribution'
+  | 'quote'
+  | 'superlative'
+  | 'health_legal'
+  | 'opinion'
+  | 'named_allegation';
+
+export type ClaimVerificationStatus =
+  | 'verified'
+  | 'supported'
+  | 'contradicted'
+  | 'unclear'
+  | 'opinion'
+  | 'needs_source'
+  | 'weak'
+  | 'high_risk';
+
+export type ClaimRiskStatus = 'verified' | 'needs_source' | 'weak' | 'high_risk';
+
+export interface ClaimFixHistoryItem {
+  timestamp: string;
+  action: 'soften' | 'replace_figure' | 'add_source' | 'remove' | 'mark_opinion';
+  beforeText: string;
+  afterText: string;
+}
+
+export interface ScriptClaimItem {
+  id: string;
+  text?: string;
+  chapterIndex?: number;
+  chapterNumber: number;
+  segmentIndex?: number;
+  sentenceText: string;
+  claimText: string;
+  kind?: ClaimKind;
+  claimType: string;
+  risk?: 'high' | 'medium' | 'low';
+  linkedFactIds?: string[];
+  status: ClaimRiskStatus;
+  sourceTitle?: string;
+  sourceUrl?: string;
+  verificationNote?: string;
+  editorReviewRequired?: boolean;
+  matchedDossierFactId?: string;
+  verifiedReplacementFigure?: string;
+  proposedRewrite?: string;
+  fixHistory?: ClaimFixHistoryItem[];
+}
+
+export interface EvidenceInsertionSuggestion {
+  id: string;
+  kind?: 'supports_claim' | 'contradicts_claim' | 'new_fact_or_quote' | 'fills_needs_data';
+  targetSegmentIndex?: number;
+  targetChapterTitle?: string;
+  chapterNumber: number;
+  chapterTitle: string;
+  newFact: FactCard;
+  reason: string;
+  sourceTitle?: string;
+  beforeParagraph?: string;
+  afterParagraph?: string;
+  originalParagraph: string;
+  proposedParagraph: string;
+  status: 'pending' | 'accepted' | 'skipped';
+}
+
+export interface ScriptVersionSnapshot {
+  id: string;
+  label: string;
+  timestamp: string;
+  createdAt?: string;
+  wordCount: number;
+  scriptText: string;
+  segments?: ScriptSegment[];
+  chapters?: WrittenChapterResult[];
+  productionRows?: ProductionScriptRow[];
+}
+
+export interface Dossier {
+  topic: string;
+  angle: string;
+  durationMinutes: number;
+  targetWordCount: number;
+  targetFactCount: number;
+  facts: FactCard[];
+  quotes: QuoteCard[];
+  books: BookRef[];
+  gaps: string[];
+  lockedAt?: string;
+  winningLens?: string;
+}
+
+export type ResearchEngineMode =
+  | 'pakistani_ground_expose'
+  | 'books_archival_parables'
+  | 'global_scientific_audit'
+  | 'full_agency_harvester';
+
+export interface ResearchConfig {
+  depth: 'quick' | 'standard' | 'deep' | 'deep_agency';
+  durationMinutes?: number;
+  region: string; // default 'Pakistan', changeable
+  sources: {
+    booksAndHistory: boolean;
+    officialDataAndReports: boolean;
+    newsAndInvestigations: boolean;
+    publicVoices: boolean;
+    globalStudiesAndCounter: boolean;
+    // Legacy compatibility keys
+    booksAndHistoricalParables?: boolean;
+    localPakistaniAndRegionalData?: boolean;
+    redditAndCitizenGroundVoices?: boolean;
+    globalStudiesAndCounterArguments?: boolean;
+  };
+  mode?: ResearchEngineMode;
+}
+
+export interface MySourcesState {
+  facts?: FactCard[];
+  quotes?: QuoteCard[];
+  books?: BookRef[];
+  uploadedFiles?: { id: string; name: string; text: string; addedAt: string }[];
+  pastedLinks?: string[];
+  pastedTexts?: { id: string; title: string; text: string }[];
+  selectedBooks?: BookRef[];
+  selectedQuotes?: QuoteCard[];
+  extractedFacts?: FactCard[];
+  extractedQuotes?: QuoteCard[];
+}
+
 export interface GeneratorConfig {
   topicOrScript: string;
+  shortTopic?: string;
+  targetCriteria?: string;
+  optionalNotes?: string;
+  niche?: string;
+  selectedNiche?: string;
+  laneMode?: 'studio' | 'quick';
+  videoFormatMode?: 'Documentary' | 'Explainer' | 'Short';
+  formatType?: 'documentary' | 'explainer' | 'short';
+  outputMode?: 'voiceover_only' | 'voiceover_and_production';
+  outputScriptMode?: 'voiceover_only' | 'voiceover_and_production';
+  blendRoles?: {
+    hookCreatorId: string;
+    structureCreatorId: string;
+    toneCreatorId: string;
+  };
   duration: string;
+  durationMinutes?: number;
+  region?: string;
   language: string;
   expertise: 'Beginner' | 'Intermediate' | 'Expert';
   platform: string;
@@ -430,11 +829,42 @@ export interface GeneratorConfig {
   enableDualScript?: boolean;
   secondaryLanguage?: string;
   subGenreId?: string;
+  researchConfig?: ResearchConfig;
+  researchV2Config?: ResearchConfig;
+  agencyDossier?: AgencyResearchDossier;
+  dossier?: Dossier;
+  mySources?: MySourcesState;
+  beatPlan?: BeatPlanItem[];
+  chapterOutline?: ChapterOutlineItem[];
+
+  // Phase R2-R5 Research Style System Fields
+  researchScope?: 'ground' | 'abroad' | 'both';
+  researchStyleIds?: string[];
+  researchPlanOverrides?: {
+    questionMode?: 'auto_topic' | 'custom' | 'none';
+    toggles?: Record<string, 0 | 0.5 | 1 | 1.5>;
+    questions?: string[];
+    includeWords?: string[];
+    avoidWords?: string[];
+    depth?: 'quick' | 'standard' | 'deep';
+    userStoriesAndNumbers?: string;
+    conceptIdea?: string;
+    conceptBudget?: string;
+    conceptPrize?: string;
+  };
+  extraWriterInstructions?: string;
 }
 
 export interface TopicSuggestion {
+  angleNumber?: number;
+  angleCategory?: string;
+  lens?: string;
   refinedTopic: string;
   reason: string;
+  promise?: string;
+  criteriaPoints?: string[];
+  questions?: string[];
+  pakistaniOrGroundProofPreview?: string;
   type: 'Angle' | 'Clarity' | 'Depth';
 }
 

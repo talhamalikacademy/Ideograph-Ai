@@ -5,6 +5,8 @@ import {
   DHRUV_RATHEE_TRANSCRIPTS,
   THYNKWHY_SUB_GENRE_BLUEPRINTS,
   THYNKWHY_TRANSCRIPTS,
+  RAFTAR_SUB_GENRE_BLUEPRINTS,
+  RAFTAR_TRANSCRIPTS,
   OTHER_CREATOR_TRANSCRIPT_PACKS,
   getSubGenreBlueprintsForCreator,
   matchCreatorSubGenreAndTranscript,
@@ -17,6 +19,8 @@ export {
   DHRUV_RATHEE_TRANSCRIPTS,
   THYNKWHY_SUB_GENRE_BLUEPRINTS,
   THYNKWHY_TRANSCRIPTS,
+  RAFTAR_SUB_GENRE_BLUEPRINTS,
+  RAFTAR_TRANSCRIPTS,
   OTHER_CREATOR_TRANSCRIPT_PACKS,
   getSubGenreBlueprintsForCreator,
   matchCreatorSubGenreAndTranscript,
@@ -615,30 +619,37 @@ export const LANGUAGE_POLICY_PROFILES: Record<PolicyProfileKey, CreatorLanguageP
 
   thynkwhy: {
     policyKey: "thynkwhy",
-    displayName: "ThynkWhy — Muazzam Shah (Rhythmic Parallel Clauses, Parables & Philosophical 'Why' Documentary)",
+    displayName: "ThynkWhy — Muazzam Shah (Investigative Documentary, Parables & Concrete Starting/Ending Architecture)",
     idiomPolicy: "ALLOWED_DRAMATIC",
     registerSummary:
-      "High-gravitas (9/10) ideological and philosophical documentary storytelling that eschews dry clinical science words in favor of rhythmic, rhyming, and parallel Urdu/Urdish clauses (ہم قافیہ و متوازی جملے), poetic historical parables (تمثیلی آغاز), and a warm brotherly-yet-literary cadence ('ڈنکے کی چوٹ پر', 'درد پر مرہم رکھنا', 'کیوں کی کھوج / Unraveling the Why').",
+      "High-gravitas (8.5–9/10) investigative documentary storytelling, media criticism, and philosophical explainer — STRICTLY NO RHYMING POETRY OR COUPLETS. Starts with a concrete dated incident, sensational media quote contrast, or 3 named real-life characters. Connects evidence to real memoirs ('Shahab Nama'), institutional data, and hospital statistics with warm spoken brotherly cadence ('ڈنکے کی چوٹ پر', 'درد پر مرہم رکھنا', 'او بھائی، بولنا تو بعد کا مرحلہ ہے', 'اپنے حصے کا کام'). Closes with a historical verdict and deep self-accountability.",
     idiomDirective:
-      'RHYTHMIC WORD-BLENDING & IDIOM PERMISSION (ہم قافیہ جملے اور محاورات ALLOWED FOR THYNKWHY ONLY): Unlike clinical science explainers, ThynkWhy thrives on rhythmic, matching parallel clauses ("کہانیاں سنا کر زمانہ بدلنے آیا ہے، معاشرے کی منفی سوچ کو مثبت سوچ سے بدلنے آیا ہے", "مگر آج یہ مقصد کہیں کھو گیا ہے، زندگی کا مقصد سو گیا ہے") and powerful Urdu expressions ("بات ہوگی ڈنکے کی چوٹ پر", "درد پر مرہم رکھنا اور معاشرہ سنوارنا", "سینہ بہ سینہ", "عقل پر پڑے تالوں کو کھولنا"). Never copy past transcript lines verbatim; create 100% original rhythmic parallel sentences for the user\'s topic.',
+      'STRICT ANTI-POETRY & ANTI-RHYME LAW (ZERO POETRY / ZERO RHYMING COUPLETS — EXCLUSIVE TO THYNKWHY): ThynkWhy (Muazzam Shah) is an investigative documentary filmmaker, NOT an Urdu poet. NEVER write rhyming poetry, couplets, ghazals, or song-like verses (ہم قافیہ شاعری یا اشعار قطعی ممنوع ہیں). Sentences must NOT end in matching rhyming sounds. Instead, write natural, compelling spoken infotainment Urdu/Roman Urdu. Open with a concrete dated scene or sensational media quote contrast, introduce named characters and hospital/court data, surge vocal aggression (9/10) to target predatory systems ("...والا، ...والا، اور ...والا", "نہ پڑھائی کی محنت، نہ اچھے نمبر لانے کا دباؤ، اور نہ نوکری کے لیے ڈگری کی محتاجی!"), and close with a historical verdict ("تاریخ کا ایک اٹل قانون ہے...", "کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟ سوچیے گا ضرور!").',
     codeSwitchingDirective:
-      'THYNKWHY BLENDED REGISTER: In Urdu (Proper), use 100% pure Urdu Nastaliq script with zero Latin characters, weaving literary philosophical depth with grounded human warmth ("آپ کا بڑا بھائی", "شام کی چائے", "خود احتسابی"). In Roman Urdu / Hinglish, blend natural spoken anchors ("oh bhai", "yaar", "boss", "danke ki chot par", "Why") with rhythmic parallel clauses.',
+      'THYNKWHY BLENDED REGISTER: In Urdu (Proper), use 100% pure Urdu Nastaliq script with zero Latin characters, weaving journalistic depth with grounded human warmth ("آپ کا بڑا بھائی", "شام کی چائے", "خود احتسابی"). In Roman Urdu / Hinglish, blend natural spoken anchors ("oh bhai", "yaar", "boss", "danke ki chot par", "apne hissay ka kaam") with concrete narrative progression.',
     hookEndingRule:
-      'THYNKWHY PARABLE & WHY HOOK RULE: Open at [00:00] with a vivid historical/moral parable (like the little sparrow carrying a drop of water over Nimrod\'s fire) or an unsettling societal mirror scene anchored on the user\'s topic, and close the hook with a piercing question of personal responsibility ("کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟" / "Kya aaj hum apne hissay ka kaam kar rahe hain?").',
+      'THYNKWHY CONCRETE STARTING HOOK ARCHITECTURE (NO ABSTRACT POETRY): Open at [00:00] with one of 3 concrete transcript formulas: (1) Dated historical raid/scene ("لاہور کی ہیرہ منڈی میں گرینڈ آپریشن چل رہا تھا... پہلے یہ کوٹھوں پر ہوتا تھا، اب صرف ایک کلک کے فاصلے پر آ چکا ہے!"), (2) Sensational media quote contrast ("خوشی کی بات یہ ہے کہ... یہ آوازیں ٹی وی اسٹوڈیوز کی تھیں... مگر اصل سڑکوں پر لوگ اطمینان سے چائے پی رہے تھے!"), or (3) Three named case studies (e.g. 16-year-old student Kajol in Chandigarh hospital, 21-year-old Sajid, Daphne in Vegas). Close the hook with an inescapable question: "کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟" / "Kya aaj hum apne hissay ka kaam kar rahe hain? Aapka nahi pata, magar mere paas is sawal ka jawab hai."',
     sentenceRhythmPatterns: [
+      "نیم برہنہ حالت میں لڑکے اور لڑکیاں کمروں سے باہر نکل کر بدحواس بھاگ رہے تھے، کیونکہ جو ہاتھ لگ رہا تھا اسے کوڑے مارے جا رہے تھے۔",
+      "پہلے رقاصائیں کوٹھوں پر محفلیں سجاتی تھیں، اب کوٹھے صرف ایک کلک کے فاصلے پر آ چکے ہیں!",
+      "نہ پڑھائی کی محنت، نہ اچھے نمبر لانے کا دباؤ، اور نہ نوکری کے لیے ڈگری کی محتاجی!",
+      "امریکہ کی ڈیفنی کو راتوں رات کروڑ پتی بنانے والا، بھارت کی معصوم کاجول کو اس خوفناک موڑ پر لانے والا، اور پاکستان کے نوجوان ساجد کی زندگی برباد کرنے والا صرف ایک مشترکہ نظام ہے!",
       "کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟ آپ کا نہیں معلوم، مگر میرے پاس اس سوال کا جواب ہے۔",
       "بولنا تو بعد کا مرحلہ ہے، اس سے پہلے سوچنا ضروری ہے کہ بولنا کیا ہے!",
       "بات ہوگی ڈنکے کی چوٹ پر، اور چوٹ لگنے پر تھوڑا درد تو ہوگا، مگر یقین مانیے مقصد درد پہنچانا نہیں بلکہ درد پر مرہم رکھنا اور معاشرہ سنوارنا ہے۔",
-      "مگر آج یہ مقصد کہیں کھو گیا ہے، زندگی کا مقصد سو گیا ہے۔",
-      "یہی وہ 'کیوں' ہے جو انسان کی عقل پر پڑے تالوں کو کھولتا ہے [CLAIM-1]۔",
-      "ضروری ہے کہ آپ کے اندر ایک سچی سوچ پیدا ہو، کیونکہ سوچ ہی سوال کو جنم دیتی ہے—وہ سوال جو آپ کی فکر بدل دے اور نیا راستہ دکھائے!"
+      "معروف ادیب قدرت اللہ شہاب اپنی خود نوشت 'شہاب نامہ' میں اس تاریخی لمحے کی چشم دید گواہی دیتے ہیں [CLAIM-1]۔",
+      "یہی وہ 'کیوں' ہے جو انسان کی عقل پر پڑے تالوں کو کھولتا ہے [CLAIM-2]۔",
+      "تاریخ کا ایک اٹل قانون ہے... جب کوئی قوم حقائق سے آنکھیں چرا کر اپنے ہی بنائے ہوئے جھوٹے بیانیے کے نشے میں مبتلا ہو جائے، تو اس کا غرور اسی طرح زمین پر آ گرتا ہے۔ سوچیے گا ضرور!"
     ],
     sentenceRhythmPatternsRoman: [
+      "Neem-barhana halat mein ladke ladkiyan kamron se bahar nikal kar bhaag rahe the, kyunke jo hathay lag raha tha usay koday maare ja rahe the!",
+      "Pehle raqasa kothon par mehfilein sajaya karti theen, ab kothey sirf aik click ki doori par hain!",
+      "Na padhai par focus karne ki zaroorat, na ache marks ka pressure, aur na naukri ke liye degree ki pareshani!",
+      "America ki Daphne ko raaton-raat ameer banane wala, Bharat ki Kajol ko underage mein is khaufnaak stage par laane wala, aur Pakistan ke Sajid ko hospital pohanchane wala sirf aik common system hai!",
       "Kya aaj hum apne hissay ka kaam kar rahe hain? Aapka nahi pata, magar mere paas is sawal ka jawab hai.",
       "Oh bhai, bolna agla step hai! Us se pehle soch lo ke bolna kya hai!",
       "Baat hogi danke ki chot par, aur chot lagne par thoda dard toh hoga yaar, magar yaqeen karein maqsad dard pohanchana nahi, dard par marham rakhna hai, muashra sanwarna hai.",
-      "Magar aaj yeh Why kahin kho gaya hai, zindagi ka maqsad so gaya hai.",
-      "Yehi Why aapke zehen ki girhein kholega [CLAIM-1]!",
+      "Tareekh ka aik atal qanoon hai... Jab koi qaum haqeeqat se aankhein chura kar apne hi banaye hue jhootay narrative ke nashe mein mubtala ho jaye, toh uska ghuroor isi tarah aasman se zameen par aa girta hai. Sochiye ga zaroor!",
       "Zaroori hai ke aapke andar aik soch paida ho, kyunke soch hi sawal ko janam deti hai—sawal woh jo aapko ghalat raah par jaane se rokk de; sawal woh jo sach ki raah dikhaye!"
     ],
     visualPromptDirective:

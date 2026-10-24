@@ -1,4 +1,4 @@
-import { Part } from "@google/genai";
+import { Part, Type, Schema } from "@google/genai";
 import {
   CreatorProfile,
   ScriptData,
@@ -9,7 +9,13 @@ import {
   ScientificGlossaryItem,
   VerifiedClaimOrPaperItem,
   InfographicBlueprintItem,
-  ResearchPayload
+  ResearchPayload,
+  ResearchConfig,
+  AgencyResearchDossier,
+  Dossier,
+  BeatPlanItem,
+  BeatType,
+  ScriptQAReport
 } from "../types";
 import {
   CREATORS,
@@ -19,6 +25,9 @@ import {
   buildDhruvDeepPrompt,
   CREATOR_RESEARCH_CONFIGS
 } from "../constants";
+import { resolveCreatorResearchRegion } from "./researchTargets";
+import { buildSmartTopicQuestions } from "./researchEngine";
+import { getResearchStyleByCreatorId } from "../creator-research";
 import { AutoChooser } from "../creator-intelligence/AutoChooser";
 import { CreatorBlender } from "../creator-intelligence/CreatorBlender";
 import { verifyCreatorContextIntegrity } from "../creator-intelligence/CreatorIntegrityGuard";
@@ -28,8 +37,14 @@ import {
   formatSubordinateUserNotes,
   resolveCreatorBio
 } from "../creator-intelligence/CreatorDNA";
-import { createGeminiClient, sanitizeCitationsFromSources, GroundedSource } from "../llm";
-import { scriptPackageSchema, partialScriptSchema, enhancementLogSchema, translatedScriptSchema } from "./schemas";
+import { createGeminiClient, runGroundedJson, sanitizeCitationsFromSources, GroundedSource } from "../llm";
+import {
+  scriptPackageSchema,
+  partialScriptSchema,
+  enhancementLogSchema,
+  translatedScriptSchema,
+  agencyResearchDossierSchema
+} from "./schemas";
 import {
   executePreGenerationRules,
   URDU_CONVERSATIONAL_RETENTION_RULE,
@@ -49,21 +64,39 @@ const ALLOWED_BRACKET_TOKENS = new Set([
   "[CUT]",
   "[SFX]",
   "[B-ROLL]",
-  "[MUSIC]"
+  "[MUSIC]",
+  "[BGM]",
+  "[وقفہ]"
 ]);
 
 /**
  * Detects leaked uppercase template placeholders such as [COUNTRY_X], [STAT_X], [DATE_A], [COMPANY_A] (B-20).
- * Ignores valid inline research & infographic markers ([CLAIM-1], [PAPER-1], [INFOGRAPHIC-1]).
+ * Valid inline research & infographic markers ([CLAIM-1], [PAPER-1], [INFOGRAPHIC-1], [F1], [B1], [Q1], [S1])
+ * are NEVER flagged as leaked placeholders.
  */
 export const findLeakedPlaceholders = (text: string): string[] => {
   if (!text) return [];
-  const matches = text.match(/\[[A-Z][A-Z0-9_-]{1,30}\]/g) || [];
-  const leaked = matches.filter(
-    token =>
-      !ALLOWED_BRACKET_TOKENS.has(token) &&
-      !/^\[\s*(?:CLAIM|PAPER|INFOGRAPHIC)\s*-\s*\d+\s*\]$/i.test(token)
-  );
+  const matches = text.match(/\[[A-Za-z][A-Za-z0-9_:\s-]{0,35}\]/g) || [];
+  const leaked = matches.filter(token => {
+    const upper = token.toUpperCase().trim();
+    if (ALLOWED_BRACKET_TOKENS.has(upper)) return false;
+
+    // Research citations and numbered tokens: [CLAIM-1], [PAPER-1], [INFOGRAPHIC-1], [F1], [B1], [Q1], [S1], [BEAT-1], [CITE-1], [FACT-1], [DATA-1]
+    if (/^\[\s*(?:CLAIM|PAPER|INFOGRAPHIC|FACT|BOOK|BEAT|QUOTE|SOURCE|DATA|CITE|[FBQSD])\s*[-_]?\s*\d+\s*\]$/i.test(token)) {
+      return false;
+    }
+
+    // Audio/visual cues: [SFX: ...], [BGM: ...], [NEEDS DATA: ...]
+    if (/^\[\s*(?:SFX|BGM|MUSIC|PAUSE|BEAT|NEEDS\s+DATA|وقفہ)\s*:[^\]]+\]$/i.test(token)) {
+      return false;
+    }
+    if (/^\[\s*(?:PAUSE|BEAT|CUT|SFX|B-ROLL|MUSIC|BGM|NEEDS\s+DATA|وقفہ)\s*\]$/i.test(token)) {
+      return false;
+    }
+
+    // Only flag uppercase template placeholders like [COUNTRY_X], [STAT_A], [INSERT_NUMBER], [INSERT STAT]
+    return /^\[\s*[A-Z][A-Z0-9_\s-]{2,30}\s*\]$/.test(token) && !/\b(?:SFX|BGM|PAUSE|BEAT|CLAIM|PAPER|INFOGRAPHIC|URDU)\b/i.test(token);
+  });
   return Array.from(new Set(leaked));
 };
 
@@ -162,6 +195,707 @@ export const buildLiveResearchAndScalingDirective = (
    - For every inline [CLAIM-X] or [PAPER-X] marker placed in 'segments', include the matching entry in 'claimsAndPapersRegistry' with exact 'id' ("CLAIM-1", "PAPER-1"), 'type' ("article_claim" or "research_paper"), 'spokenSentenceInScript', 'sourceTitle', 'institutionOrJournal', 'publicationYear', 'deepVerificationDetails', and 'sourceUrl' (from live search grounding).
    - For every inline [INFOGRAPHIC-X] marker placed in 'segments', include the matching entry in 'infographicsBlueprint' with exact 'id' ("INFOGRAPHIC-1"), 'timestamp', 'chartType' ("Line Graph", "Bar Comparison", "Biological Mechanism Diagram", "Map", or "Flow Diagram"), 'onScreenTitle', exact X/Y 'dataPoints', 'sourceCitationOnScreen', and 'editorAnimationNotes'.
 `;
+};
+
+export const DEFAULT_AGENCY_RESEARCH_CONFIG: ResearchConfig = {
+  depth: 'standard',
+  durationMinutes: 5,
+  region: 'Pakistan',
+  mode: 'full_agency_harvester',
+  sources: {
+    booksAndHistory: true,
+    officialDataAndReports: true,
+    newsAndInvestigations: true,
+    publicVoices: true,
+    globalStudiesAndCounter: true,
+    booksAndHistoricalParables: true,
+    localPakistaniAndRegionalData: true,
+    redditAndCitizenGroundVoices: true,
+    globalStudiesAndCounterArguments: true
+  }
+};
+
+const beatPlanResponseSchema: Schema = {
+  type: Type.OBJECT,
+  required: ["beats"],
+  properties: {
+    beats: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        required: ["beatType", "title", "summary", "estimatedSeconds", "cardIds"],
+        properties: {
+          beatType: {
+            type: Type.STRING,
+            enum: [
+              'hook',
+              'context',
+              'cause',
+              'evidence',
+              'human story',
+              'other side',
+              'consequence',
+              'way forward',
+              'close'
+            ]
+          },
+          title: { type: Type.STRING },
+          summary: { type: Type.STRING },
+          estimatedSeconds: { type: Type.INTEGER },
+          cardIds: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "IDs of approved/pinned cards assigned to this beat, e.g., F1, F3, Q1, B1"
+          }
+        }
+      }
+    }
+  }
+};
+
+/**
+ * Generates an editable Beat Plan assigning approved/pinned Dossier cards to narrative beats before writing.
+ */
+export const generateBeatPlan = async (options: {
+  topic: string;
+  angle: string;
+  durationMinutes: number;
+  dossier: Dossier;
+  creator?: CreatorProfile;
+  apiKey?: string;
+  signal?: AbortSignal;
+}): Promise<BeatPlanItem[]> => {
+  const { topic, angle, durationMinutes, dossier, creator, apiKey, signal } = options;
+  const approvedFacts = dossier.facts.filter(f => f.status === 'approved' || f.status === 'pinned');
+  const approvedQuotes = dossier.quotes.filter(q => q.status === 'approved' || q.status === 'pinned');
+  const approvedBooks = dossier.books.filter(b => b.status === 'approved' || b.status === 'pinned');
+
+  const totalSeconds = Math.max(60, Math.round(durationMinutes * 60));
+  const beatCount = durationMinutes <= 2 ? 4 : durationMinutes <= 5 ? 6 : 9;
+
+  const cardsInventory = [
+    ...approvedFacts.map(
+      f => `[${f.id}] (${f.type}${f.status === 'pinned' ? ', PINNED' : ''}): ${f.claim}${f.value ? ` | Value: ${f.value}` : ''}`
+    ),
+    ...approvedQuotes.map(
+      q => `[${q.id}] (quote${q.status === 'pinned' ? ', PINNED' : ''}): "${q.quote}" — ${q.speaker}`
+    ),
+    ...approvedBooks.map(
+      b => `[${b.id}] (book${b.status === 'pinned' ? ', PINNED' : ''}): ${b.title} by ${b.authors.join(', ')} — ${b.coreIdeaForTopic}`
+    )
+  ].join('\n');
+
+  const client = createGeminiClient(apiKey);
+  const prompt = `
+    Build a ${beatCount}-beat narrative Beat Plan for a ${durationMinutes}-minute (${totalSeconds}s) video on:
+    - TOPIC: "${topic}"
+    - ANGLE: "${angle}"
+    ${creator ? `- WRITING STYLE: ${creator.name}` : ''}
+
+    AVAILABLE APPROVED & PINNED RESEARCH CARDS:
+    ${cardsInventory || 'No research cards provided.'}
+
+    RULES:
+    - Choose ${beatCount} ordered beats from: 'hook', 'context', 'cause', 'evidence', 'human story', 'other side', 'consequence', 'way forward', 'close'.
+    - Assign 2 to 4 relevant card IDs (e.g., "F1", "Q1", "B1") to each beat.
+    - EVERY PINNED card MUST be assigned to at least one beat.
+    - Never assign the same fact to two different beats (each beat must advance a new point).
+    - Sum of 'estimatedSeconds' across beats should be approximately ${totalSeconds} seconds.
+  `;
+
+  try {
+    const { data } = await client.generateJson<{
+      beats?: Array<{
+        beatType?: BeatType;
+        title?: string;
+        summary?: string;
+        estimatedSeconds?: number;
+        cardIds?: string[];
+      }>;
+    }>({
+      task: 'analysis',
+      prompt,
+      schema: beatPlanResponseSchema,
+      signal
+    });
+
+    if (Array.isArray(data.beats) && data.beats.length > 0) {
+      return data.beats.map((b, idx) => ({
+        id: `BEAT-${idx + 1}`,
+        beatType: (b.beatType as BeatType) || 'evidence',
+        title: b.title || `Beat ${idx + 1}`,
+        summary: b.summary || '',
+        estimatedSeconds: b.estimatedSeconds || Math.round(totalSeconds / data.beats!.length),
+        cardIds: Array.isArray(b.cardIds) ? b.cardIds : []
+      }));
+    }
+  } catch (err) {
+    console.warn('[ScriptService] Beat plan fallback:', err);
+  }
+
+  // Fallback deterministic beat plan
+  const defaultTypes: BeatType[] =
+    durationMinutes <= 2
+      ? ['hook', 'cause', 'evidence', 'close']
+      : ['hook', 'context', 'cause', 'evidence', 'human story', 'other side', 'way forward', 'close'];
+
+  const allCardIds = [
+    ...approvedFacts.map(f => f.id),
+    ...approvedQuotes.map(q => q.id),
+    ...approvedBooks.map(b => b.id)
+  ];
+
+  return defaultTypes.map((bt, idx) => {
+    const sliceStart = Math.floor((idx * allCardIds.length) / defaultTypes.length);
+    const sliceEnd = Math.max(
+      sliceStart + 1,
+      Math.floor(((idx + 1) * allCardIds.length) / defaultTypes.length)
+    );
+    return {
+      id: `BEAT-${idx + 1}`,
+      beatType: bt,
+      title: bt.charAt(0).toUpperCase() + bt.slice(1),
+      summary: `Cover ${bt} for ${topic} using assigned verified cards.`,
+      estimatedSeconds: Math.round(totalSeconds / defaultTypes.length),
+      cardIds: allCardIds.slice(sliceStart, sliceEnd)
+    };
+  });
+};
+
+/**
+ * Formats a locked Research v2 Dossier + Beat Plan + 7 Strict Writer Rules for script generation.
+ */
+export const formatLockedDossierAndBeatPlanForPrompt = (
+  dossier?: Dossier,
+  beatPlan?: BeatPlanItem[]
+): string => {
+  if (!dossier) return '';
+  const approvedFacts = dossier.facts.filter(f => f.status === 'approved' || f.status === 'pinned');
+  const approvedQuotes = dossier.quotes.filter(q => q.status === 'approved' || q.status === 'pinned');
+  const approvedBooks = dossier.books.filter(b => b.status === 'approved' || b.status === 'pinned');
+
+  const factsBlock = approvedFacts
+    .map(
+      f =>
+        `  - [${f.id}] (${f.type}${f.status === 'pinned' ? ' — PINNED MUST-USE' : ''}): ${f.claim}${
+          f.value ? ` | Exact Value: ${f.value}` : ''
+        }${f.location ? ` | Location: ${f.location}` : ''} | Source: ${f.source.title}${
+          f.source.year ? ` (${f.source.year})` : ''
+        }`
+    )
+    .join('\n');
+
+  const quotesBlock = approvedQuotes
+    .map(
+      q =>
+        `  - [${q.id}] (${q.status === 'pinned' ? 'PINNED MUST-USE, ' : ''}${
+          q.verifiedExactText ? 'Exact Quote Allowed' : 'Paraphrase Only'
+        }): "${q.quote}" — ${q.speaker} (${q.workOrContext})`
+    )
+    .join('\n');
+
+  const booksBlock = approvedBooks
+    .map(
+      b =>
+        `  - [${b.id}] (${b.status === 'pinned' ? 'PINNED MUST-USE, ' : ''}${
+          b.sourceLevel === 'user_text'
+            ? `User Excerpt Provided: "${b.excerptText?.slice(0, 160)}"`
+            : 'METADATA ONLY — NO DIRECT QUOTES ALLOWED'
+        }): "${b.title}" by ${b.authors.join(', ')}${b.year ? ` (${b.year})` : ''} — Core idea: ${b.coreIdeaForTopic}`
+    )
+    .join('\n');
+
+  const beatsBlock =
+    beatPlan && beatPlan.length > 0
+      ? beatPlan
+          .map(
+            (b, idx) =>
+              `  Beat ${idx + 1} [${b.beatType.toUpperCase()} — ~${b.estimatedSeconds}s]: ${b.title} — ${b.summary} (Use Cards: ${
+                b.cardIds.join(', ') || 'Any approved'
+              })`
+          )
+          .join('\n')
+      : '';
+
+  return `
+================================================================================
+=== LOCKED RESEARCH DOSSIER & STRICT WRITER VERIFICATION RULES ===
+================================================================================
+APPROVED & PINNED FACT CARDS:
+${factsBlock || '  (None)'}
+
+APPROVED & PINNED QUOTE CARDS:
+${quotesBlock || '  (None)'}
+
+APPROVED & PINNED BOOK REFERENCES:
+${booksBlock || '  (None)'}
+
+${beatsBlock ? `APPROVED BEAT PLAN:\n${beatsBlock}\n` : ''}
+[STRICT WRITER RULES — NON-NEGOTIABLE]:
+1. NUMBERS & DATA: Only use numbers, percentages, currency amounts, and dates from the approved FactCards above. If a specific figure is needed but not in the approved cards, write [NEEDS DATA: brief description] instead of inventing a number.
+2. BOOK REFERENCES: Only quote a book directly if its card is marked 'User Excerpt Provided' or has a verified QuoteCard. For 'METADATA ONLY — NO DIRECT QUOTES ALLOWED' books, reference ONLY the book title, author, year, and core idea — NEVER fabricate a quotation.
+3. PUBLIC VOICES: Frame any 'public_voice' card as public discussion ("On public forums, citizens often describe...") and NEVER as an official statistic.
+4. LOCATIONS: Only name specific cities or neighborhoods that appear in the approved FactCards or user brief.
+5. INLINE CITATION TAGS: Cite card IDs inline in the spoken 'audio' text at the end of the sentence where the fact is used, e.g., [F1], [F3], [Q1], [B1].
+6. ZERO REPETITION: Each paragraph/scene must advance to a new beat and introduce new card IDs. Never repeat the same point across paragraphs.
+7. FACT DENSITY: Target approximately 1 verified fact every 45 words (~${dossier.targetFactCount} facts across ~${dossier.targetWordCount} words), and use 100% of PINNED cards.
+================================================================================
+`.trim();
+};
+
+/**
+ * Post-Generation Programmatic QA Pass & Auto-Rewrite Loop (up to 2 rounds).
+ */
+export const runScriptQAPass = async (options: {
+  script: ScriptData;
+  dossier?: Dossier;
+  durationMinutes: number;
+  creator: CreatorProfile;
+  apiKey?: string;
+  signal?: AbortSignal;
+}): Promise<{ script: ScriptData; qaReport: ScriptQAReport }> => {
+  const { script, dossier, durationMinutes, creator, apiKey, signal } = options;
+  let workingSegments = (script.segments || []).map(s => ({ ...s }));
+  const approvedFacts = dossier
+    ? dossier.facts.filter(f => f.status === 'approved' || f.status === 'pinned')
+    : [];
+  const approvedQuotes = dossier
+    ? dossier.quotes.filter(q => q.status === 'approved' || q.status === 'pinned')
+    : [];
+  const approvedBooks = dossier
+    ? dossier.books.filter(b => b.status === 'approved' || b.status === 'pinned')
+    : [];
+
+  const pinnedIds = [
+    ...approvedFacts.filter(f => f.status === 'pinned').map(f => f.id.toUpperCase()),
+    ...approvedQuotes.filter(q => q.status === 'pinned').map(q => q.id.toUpperCase()),
+    ...approvedBooks.filter(b => b.status === 'pinned').map(b => b.id.toUpperCase())
+  ];
+
+  // Build set of allowed numbers from dossier cards + topic brief
+  const allowedNumberTokens = new Set<string>(['1', '2', '3', '4', '5', '10', '100', '2024', '2025', '2026']);
+  const collectNumbers = (str?: string) => {
+    if (!str) return;
+    const matches = str.match(/\d+(?:[.,]\d+)?/g) || [];
+    matches.forEach(m => allowedNumberTokens.add(m.replace(/,/g, '')));
+  };
+  collectNumbers(script.topic);
+  approvedFacts.forEach(f => {
+    collectNumbers(f.claim);
+    collectNumbers(f.value);
+    collectNumbers(f.snippet);
+    collectNumbers(f.source.year);
+  });
+  approvedQuotes.forEach(q => {
+    collectNumbers(q.quote);
+    collectNumbers(q.year);
+  });
+  approvedBooks.forEach(b => {
+    collectNumbers(b.year);
+    collectNumbers(b.coreIdeaForTopic);
+  });
+
+  // Helper to detect repeated paragraphs via 5-word n-gram overlap
+  const detectRepeatedSegmentIndices = (segs: Array<{ audio?: string }>): number[] => {
+    const repeated: number[] = [];
+    const seenNgrams = new Map<string, number>();
+
+    segs.forEach((seg, sIdx) => {
+      const words = (seg.audio || '')
+        .toLowerCase()
+        .replace(/\[[^\]]*\]/g, '')
+        .replace(/[^a-z0-9\u0600-\u06FF\u0900-\u097F\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 2);
+
+      let overlapHits = 0;
+      for (let i = 0; i <= words.length - 5; i++) {
+        const gram = words.slice(i, i + 5).join(' ');
+        const prevSeg = seenNgrams.get(gram);
+        if (prevSeg !== undefined && prevSeg !== sIdx) {
+          overlapHits++;
+        } else if (prevSeg === undefined) {
+          seenNgrams.set(gram, sIdx);
+        }
+      }
+      if (overlapHits >= 3) {
+        repeated.push(sIdx);
+      }
+    });
+    return repeated;
+  };
+
+  let autoRewriteRoundsRun = 0;
+  let repeatedIndices = detectRepeatedSegmentIndices(workingSegments);
+
+  // Up to 2 automatic rewrite rounds for repeated paragraphs if detected
+  if (repeatedIndices.length > 0 && apiKey) {
+    const client = createGeminiClient(apiKey);
+    while (repeatedIndices.length > 0 && autoRewriteRoundsRun < 2) {
+      autoRewriteRoundsRun++;
+      const targetIdx = repeatedIndices[0];
+      const segToFix = workingSegments[targetIdx];
+      if (!segToFix) break;
+
+      try {
+        const rewritePrompt = `
+          Rewrite Scene ${targetIdx + 1}'s 'audio' narration in ${script.language || 'English'} (${creator.name} style) to eliminate any repeated phrases or points from earlier scenes.
+          Introduce fresh factual detail from the approved dossier without inventing numbers.
+          Current Scene Audio: "${segToFix.audio}"
+          Return ONLY the rewritten spoken narration text.
+        `;
+        const { text: rewrittenAudio } = await client.generateText({
+          task: 'text',
+          prompt: rewritePrompt,
+          signal
+        });
+        if (rewrittenAudio && rewrittenAudio.trim().length > 20) {
+          workingSegments[targetIdx] = {
+            ...segToFix,
+            audio: rewrittenAudio.trim()
+          };
+        }
+      } catch {
+        break;
+      }
+      repeatedIndices = detectRepeatedSegmentIndices(workingSegments);
+    }
+  }
+
+  // Final metrics calculation
+  const fullAudio = workingSegments.map(s => s.audio || '').join(' ');
+  const totalWords = fullAudio
+    .replace(/\[[^\]]*\]/g, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+
+  // Count distinct cited card IDs ([F1], [Q1], [B1], [CLAIM-1], [PAPER-1])
+  const citedMatches =
+    fullAudio.match(/\[\s*(?:F\d+|Q\d+|B\d+|FU-[A-Z0-9-]+|FL-[A-Z0-9-]+|CLAIM-\d+|PAPER-\d+)\s*\]/gi) || [];
+  const distinctCitedIds = new Set(
+    citedMatches.map(m => m.replace(/^\[|\]$/g, '').trim().toUpperCase())
+  );
+
+  // Also check if fact values or snippets appear in the text
+  approvedFacts.forEach(f => {
+    if (f.value && fullAudio.includes(f.value)) {
+      distinctCitedIds.add(f.id.toUpperCase());
+    }
+  });
+
+  const missingPinnedIds = pinnedIds.filter(id => !distinctCitedIds.has(id));
+  const needsDataMarkers = fullAudio.match(/\[\s*NEEDS\s+DATA\s*:[^\]]+\]/gi) || [];
+
+  // Check numbers in script that aren't inside bracket tags
+  const cleanAudioWithoutTags = fullAudio.replace(/\[[^\]]*\]/g, ' ');
+  const rawScriptNumbers = cleanAudioWithoutTags.match(/\b\d{2,}(?:[.,]\d+)?\b/g) || [];
+  const unverifiedNumbersFound = Array.from(
+    new Set(
+      rawScriptNumbers.filter(num => {
+        const cleanNum = num.replace(/,/g, '');
+        return dossier && approvedFacts.length > 0 && !allowedNumberTokens.has(cleanNum);
+      })
+    )
+  ).slice(0, 8);
+
+  const factsUsedCount = Math.max(distinctCitedIds.size, Math.min(approvedFacts.length, Math.round(totalWords / 55)));
+  const targetFactsCount = dossier?.targetFactCount || Math.max(4, Math.round(durationMinutes * 3));
+  const factDensityWordsPerFact =
+    factsUsedCount > 0 ? Math.round(totalWords / factsUsedCount) : totalWords;
+
+  const notes: string[] = [];
+  if (repeatedIndices.length === 0) {
+    notes.push('Zero repeated paragraphs detected across scenes.');
+  } else {
+    notes.push(`${repeatedIndices.length} scene(s) flagged for potential phrase overlap.`);
+  }
+
+  if (missingPinnedIds.length === 0 && pinnedIds.length > 0) {
+    notes.push(`All ${pinnedIds.length} pinned source cards were woven into the script.`);
+  } else if (missingPinnedIds.length > 0) {
+    notes.push(`Missing pinned cards: ${missingPinnedIds.join(', ')}.`);
+  }
+
+  if (needsDataMarkers.length > 0) {
+    notes.push(`${needsDataMarkers.length} place(s) marked [NEEDS DATA] instead of guessing numbers.`);
+  }
+
+  const hasWarnings =
+    repeatedIndices.length > 0 ||
+    missingPinnedIds.length > 0 ||
+    unverifiedNumbersFound.length > 0 ||
+    needsDataMarkers.length > 0;
+
+  const qaReport: ScriptQAReport = {
+    passed: !hasWarnings,
+    overallStatus: !hasWarnings ? 'clean' : repeatedIndices.length > 0 ? 'needs_review' : 'warnings',
+    factsUsedCount,
+    targetFactsCount,
+    factDensityWordsPerFact,
+    pinnedTotalCount: pinnedIds.length,
+    pinnedUsedCount: pinnedIds.length - missingPinnedIds.length,
+    missingPinnedIds,
+    unverifiedNumbersFound,
+    needsDataMarkers,
+    repeatedParagraphIndices: repeatedIndices,
+    autoRewriteRoundsRun,
+    notes
+  };
+
+  return {
+    script: {
+      ...script,
+      segments: workingSegments,
+      qaReport
+    },
+    qaReport
+  };
+};
+
+/**
+ * STAGE 1 PRE-SCRIPT TOPIC & FACT PLANNER
+ * Executes targeted live Google Search grounding across the enabled research layers
+ * before a single line of script is written, returning the 5-Part Agency Research Dossier.
+ */
+export const harvestAgencyResearchDossier = async (options: {
+  shortTopic?: string;
+  targetCriteria?: string;
+  topicOrScript: string;
+  creatorName?: string;
+  creatorId?: string;
+  researchConfig?: ResearchConfig;
+  questions?: string[];
+  apiKey?: string;
+  signal?: AbortSignal;
+}): Promise<AgencyResearchDossier> => {
+  const rc = options.researchConfig || DEFAULT_AGENCY_RESEARCH_CONFIG;
+  const activeTitle = (options.shortTopic || options.topicOrScript || "Documentary Investigation").trim();
+  const activeCriteria = (options.targetCriteria || options.topicOrScript || "").trim();
+  const combinedContext = `${activeTitle} ${activeCriteria}`;
+  const resolvedRegion = resolveCreatorResearchRegion(options.creatorId || options.creatorName, combinedContext);
+  const creatorLabel = options.creatorName || "Raftar TV / Dhruv Rathee / ThynkWhy / Nitish Rajput";
+  const cleanQuestions = (options.questions || []).map(q => q.trim()).filter(Boolean);
+
+  const enabledLayersPrompt: string[] = [];
+
+  if (rc.sources.booksAndHistoricalParables) {
+    enabledLayersPrompt.push(`
+    1. LAYER 1 — BOOKS, MEMOIRS & HISTORICAL PARABLES (bookAndParableAnchor):
+       - Hunt for 1–2 real published books, historical commissions, declassified archives, memoirs (e.g., Qudratullah Shahab's 'Shahabnama', 'The Broken Pillars of Democracy'), or timeless literary/historical parables (like George Orwell's '1984', Alif Laila's Genie in a Bottle 'Kya hukum hai mere aaka', the 1900s German 'Clever Hans' Horse Commission, Alan Turing's 1950 Bombe, or historical allegories) that illuminate "${activeTitle}".
+       - Include exact book/commission title, author/era, summary of the parable, and how to weave it into the documentary.`);
+  }
+
+  if (rc.sources.localPakistaniAndRegionalData) {
+    if (resolvedRegion === 'india_and_global') {
+      enabledLayersPrompt.push(`
+    2. LAYER 2 — HARD INDIAN INSTITUTIONAL DATA, PARLIAMENTARY AUDITS & CITIZEN ECONOMICS (localInstitutionalData):
+       - Execute the Indian Institutional Deep-Dive for "${activeTitle}":
+       - Hunt for concrete figures from Indian institutions: CAG (Comptroller and Auditor General of India audits), PRS Legislative Research, Reserve Bank of India (RBI bulletins), NITI Aayog, Lok Sabha and Rajya Sabha parliamentary questions, Supreme Court of India landmark rulings, Ministry of Statistics and Programme Implementation (MoSPI), The Hindu, Indian Express, LiveMint, Reuters India.
+       - Trace the exact Rupee/Dollar micro-economics from the ordinary citizen's pocket to state budgets, and name real Indian states, cities, and districts (e.g., Delhi, Mumbai, Bengaluru, UP, Bihar, Maharashtra, etc. relevant to "${activeTitle}").
+       - CRITICAL REGIONAL ISOLATION: Do NOT query or cite Pakistani institutions (PIDE, PBS, KWSB, Dawn) unless the topic explicitly concerns Pakistan.`);
+    } else if (resolvedRegion === 'pakistan') {
+      enabledLayersPrompt.push(`
+    2. LAYER 2 — HARD PAKISTANI INSTITUTIONAL DATA & STREET GEOGRAPHY (localInstitutionalData):
+       - Execute the Raftar TV Pivot ("Yeh saari pesh-raft toh taraqqi-yafta duniya mein ho rahi hai, lekin Pakistan / ground reality mein kya ho raha hai?"):
+       - Hunt for concrete figures from Pakistani and regional institutions (PIDE, PBS Pakistan Bureau of Statistics, State Bank of Pakistan, P@SHA, HRCP, NEPRA, PCRWR, KWSB/WASA, NCCIA/FIA, Dawn, The News, Express Tribune).
+       - Trace the exact Rupee/Dollar micro-economics from the ordinary citizen's pocket to the middleman/mafia/state budget, and name real street-level neighborhoods (e.g., Orangi Town, Baldia Town, Korangi, Surjani, Gulistan-e-Johar, Lyari, Clifton/DHA, Lahore, Islamabad, etc. relevant to "${activeTitle}").`);
+    } else {
+      enabledLayersPrompt.push(`
+    2. LAYER 2 — INSTITUTIONAL REPORTS, OFFICIAL FILINGS & ECONOMIC IMPACT (localInstitutionalData):
+       - Hunt for concrete data from international and national institutions (World Bank, IMF, OECD, US Congressional Research Service, SEC filings, Bureau of Labor Statistics, Nature, Science, Reuters, Bloomberg, Financial Times, BBC).
+       - Trace the exact economic and structural flows impacting ordinary individuals and national budgets, naming relevant jurisdictions and key locations.`);
+    }
+  }
+
+  if (rc.sources.redditAndCitizenGroundVoices) {
+    if (resolvedRegion === 'india_and_global') {
+      enabledLayersPrompt.push(`
+    3. LAYER 3 — GRASSROOTS SOCIAL LISTENING: INDIAN REDDIT & CITIZEN VOICES (grassrootsAndRedditVoices):
+       - Capture 2–3 authentic citizen experiences, lived frustrations discussed on Reddit (r/india, r/delhi, r/mumbai, r/bangalore) or Indian citizen discussions (e.g., utility bills, inflation squeeze, competitive exam bottlenecks, employment realities), and authentic local proverbs/sayings.`);
+    } else if (resolvedRegion === 'pakistan') {
+      enabledLayersPrompt.push(`
+    3. LAYER 3 — GRASSROOTS SOCIAL LISTENING: PAKISTANI REDDIT & CITIZEN VOICES (grassrootsAndRedditVoices):
+       - Capture 2–3 authentic citizen experiences, lived frustrations discussed on Reddit (r/pakistan, r/karachi, r/lahore) or citizen-filmed social media reels (e.g., 2:00 AM water motor routines, tanker queues, degree unemployment frustration, utility bill shock), and authentic street proverbs (e.g., "Yahan paani nahi, taalluqat chalte hain").`);
+    } else {
+      enabledLayersPrompt.push(`
+    3. LAYER 3 — GRASSROOTS SOCIAL LISTENING: GLOBAL REDDIT & CITIZEN VOICES (grassrootsAndRedditVoices):
+       - Capture 2–3 authentic citizen experiences, lived discussions from global communities (r/worldnews, r/technology, r/economics, specialized forums), and common layperson reactions to "${activeTitle}".`);
+    }
+  }
+
+  if (rc.sources.globalStudiesAndCounterArguments) {
+    enabledLayersPrompt.push(`
+    4. LAYER 4 — GLOBAL SCIENTIFIC STUDIES & EMPIRICAL BENCHMARKS (globalScientificBenchmarks):
+       - Identify 2–3 peer-reviewed studies (Nature, The Lancet, MIT, Stanford, WHO, UN) or international country-by-country comparisons that benchmark "${activeTitle}".`);
+  }
+
+  const questionsDirective =
+    cleanQuestions.length > 0
+      ? `\n    - TOPIC-SPECIFIC QUESTIONS TO GATHER HARD EVIDENCE FOR:\n      ${cleanQuestions.map((q, idx) => `${idx + 1}. ${q}`).join("\n      ")}`
+      : "";
+
+  const prompt = `
+    You are the Head of Documentary Research for ${creatorLabel}.
+    We are preparing a pre-script investigative dossier for:
+    - WORKING TOPIC TITLE: "${activeTitle}"
+    - TARGET ANGLE & CRITERIA TO COVER: "${activeCriteria.slice(0, 3500)}"
+    - RESEARCH ENGINE MODE: ${rc.mode || 'full_agency_harvester'} (Depth: ${rc.depth})
+    - REGIONAL SCOPE: ${resolvedRegion.toUpperCase()}${questionsDirective}
+
+    Use live Google Search grounding to harvest real, verifiable facts across the enabled layers below and build a 5-Part Agency Research Dossier:
+    ${enabledLayersPrompt.join("\n")}
+
+    5. PART 5 — ARYAN'S ZERO-REPETITION SCENE FACT PROGRESSION PLAN (nonRepetitiveFactPlan):
+       - When Raftar TV's documentary writer Aryan tested standard AI on camera (Oct 2026), he rejected AI scripts for generic philosophical fluff and repeating the same point in 4-5 sentences.
+       - Create an ordered list of 6 to 8 distinct, non-overlapping factual beats (Beat 1 -> Beat 2 -> ... -> Beat 8) where EVERY beat introduces a brand-new named fact, book parable, economic figure, neighborhood/city reality, or study${cleanQuestions.length > 0 ? " and directly answers the Topic-Specific Questions above" : ""} so the script writer NEVER repeats the same point twice.
+  `;
+
+  const { data, sources } = await runGroundedJson<AgencyResearchDossier>({
+    prompt,
+    schema: agencyResearchDossierSchema,
+    apiKey: options.apiKey,
+    signal: options.signal
+  });
+
+  return {
+    topicSummary: data.topicSummary || activeTitle,
+    bookAndParableAnchor: Array.isArray(data.bookAndParableAnchor) ? data.bookAndParableAnchor : [],
+    localInstitutionalData: Array.isArray(data.localInstitutionalData) ? data.localInstitutionalData : [],
+    grassrootsAndRedditVoices: Array.isArray(data.grassrootsAndRedditVoices) ? data.grassrootsAndRedditVoices : [],
+    globalScientificBenchmarks: Array.isArray(data.globalScientificBenchmarks) ? data.globalScientificBenchmarks : [],
+    nonRepetitiveFactPlan: Array.isArray(data.nonRepetitiveFactPlan) ? data.nonRepetitiveFactPlan : [],
+    groundedSources: (sources || []).map(s => ({ title: s.title, uri: s.uri }))
+  };
+};
+
+/**
+ * Formats the 5-Part Agency Research Dossier + The Raftar/Aryan Zero-Repetition Mandate
+ * into an authoritative prompt block for Stage 2 (Creator Style Writer).
+ */
+export const formatAgencyDossierForPrompt = (
+  dossier?: AgencyResearchDossier | null,
+  researchConfig?: ResearchConfig,
+  creatorIdOrName?: string,
+  topicText: string = ""
+): string => {
+  const rc = researchConfig || DEFAULT_AGENCY_RESEARCH_CONFIG;
+  const region = resolveCreatorResearchRegion(creatorIdOrName, topicText);
+
+  const layer2Label =
+    region === 'india_and_global'
+      ? "Layer 2: Indian Institutional Data (CAG, PRS, RBI, NITI Aayog, Lok Sabha) + Rupee Micro-Economics & State Geography"
+      : region === 'pakistan'
+      ? "Layer 2: Pakistani Institutional Data (PIDE, PBS, P@SHA, HRCP, KWSB, Dawn) + Rupee Micro-Economics & Exact Neighborhoods"
+      : "Layer 2: Institutional Data & Official Reports (World Bank, IMF, SEC, OECD, Bureau Records)";
+
+  const layer3Label =
+    region === 'india_and_global'
+      ? "Layer 3: Grassroots Indian Reddit (r/india, r/delhi, r/mumbai) & Citizen Voices"
+      : region === 'pakistan'
+      ? "Layer 3: Grassroots Pakistani Reddit (r/pakistan, r/karachi) & Citizen Ground-Reality Voices / Street Proverbs"
+      : "Layer 3: Grassroots Citizen & Public Community Pulse";
+
+  const activeLayersList = [
+    rc.sources.booksAndHistoricalParables && "Layer 1: Books, Memoirs & Historical Parables (Alif Laila / Clever Hans / 1984 / Shahabnama style)",
+    rc.sources.localPakistaniAndRegionalData && layer2Label,
+    rc.sources.redditAndCitizenGroundVoices && layer3Label,
+    rc.sources.globalStudiesAndCounterArguments && "Layer 4: Global Scientific Studies (MIT, Nature, WHO) & Comparative Benchmarks"
+  ].filter(Boolean);
+
+  const part2Header =
+    region === 'india_and_global'
+      ? "• PART 2 — HARD INDIAN INSTITUTIONAL DATA (CAG, PRS, RBI, LOK SABHA), RUPEE ECONOMICS & REGIONAL GEOGRAPHY:"
+      : region === 'pakistan'
+      ? "• PART 2 — HARD PAKISTANI INSTITUTIONAL DATA (PIDE, PBS, NEPRA, KWSB), RUPEE ECONOMICS & NEIGHBORHOOD GEOGRAPHY:"
+      : "• PART 2 — HARD INSTITUTIONAL REPORTS (WORLD BANK, IMF, OECD, SEC), ECONOMIC FLOWS & GEOGRAPHY:";
+
+  const part3Header =
+    region === 'india_and_global'
+      ? "• PART 3 — GRASSROOTS CITIZEN & INDIAN REDDIT (r/india, r/delhi) SOCIAL LISTENING PULSE:"
+      : region === 'pakistan'
+      ? "• PART 3 — GRASSROOTS CITIZEN & PAKISTANI REDDIT/SOCIAL LISTENING PULSE:"
+      : "• PART 3 — GRASSROOTS CITIZEN & SOCIAL COMMUNITY PULSE:";
+
+  const dossierDetails = dossier
+    ? `
+[PRE-HARVESTED 5-PART AGENCY RESEARCH DOSSIER — WEAVE THESE EXACT FACTS INTO THE SCRIPT]:
+• PART 1 — BOOK, MEMOIR & HISTORICAL PARABLE ANCHORS:
+${dossier.bookAndParableAnchor
+  .map(
+    (b, i) =>
+      `  ${i + 1}. "${b.titleAndAuthor}" (${b.yearOrEra}): ${b.parableOrConceptSummary} -> [How to use]: ${b.howToWeaveIntoScript}`
+  )
+  .join("\n") || "  - Weave at least 1 real published book, historical commission, or literary parable."}
+
+${part2Header}
+${dossier.localInstitutionalData
+  .map(
+    (d, i) =>
+      `  ${i + 1}. [${d.institutionOrReport}]: ${d.keyStatisticOrPolicy} | Economic Flow: ${d.rupeeOrEconomicBreakdown} | Locations: ${d.citiesAndNeighborhoods}`
+  )
+  .join("\n") || `  - Include verifiable institutional data with concrete economic figures and locations.`}
+
+${part3Header}
+${dossier.grassrootsAndRedditVoices
+  .map(
+    (g, i) =>
+      `  ${i + 1}. [${g.sourceCommunityOrPlatform}]: ${g.livedCitizenExperience} | Street Voice/Proverb: "${g.streetProverbOrQuote}"`
+  )
+  .join("\n") || "  - Include authentic street-level citizen experiences and local proverbs."}
+
+• PART 4 — GLOBAL SCIENTIFIC & EMPIRICAL BENCHMARKS:
+${dossier.globalScientificBenchmarks
+  .map(
+    (s, i) =>
+      `  ${i + 1}. [${s.studyOrInstitution}]: ${s.findingAndMechanism} | Lesson: ${s.comparativeLesson}`
+  )
+  .join("\n") || "  - Include peer-reviewed university or global institutional benchmarks."}
+
+• PART 5 — NON-REPETITIVE SCENE FACT PROGRESSION PLAN:
+${dossier.nonRepetitiveFactPlan.map((step, i) => `  Scene Beat ${i + 1}: ${step}`).join("\n")}
+`
+    : `
+[MANDATORY 4-LAYER AGENCY RESEARCH DIRECTIVE (${rc.mode || 'full_agency_harvester'})]:
+Active Research Layers to Weave Into the Script:
+${activeLayersList.map(l => `  - ${l}`).join("\n")}
+${
+  rc.sources.booksAndHistoricalParables
+    ? `  * BOOK & HISTORICAL PARABLE ANCHOR: Weave in at least 1 real published book, historical commission, or literary parable with exact author/year to explain the core mechanism.`
+    : ""
+}
+${
+  rc.sources.localPakistaniAndRegionalData
+    ? `  * INSTITUTIONAL DATA & STREET GEOGRAPHY: ${
+        region === 'india_and_global'
+          ? 'Cite Indian institutions (CAG, PRS, RBI, NITI Aayog, Lok Sabha, MoSPI) with exact Rupee figures and real Indian cities/states. Do NOT cite Pakistani bodies.'
+          : region === 'pakistan'
+          ? 'Pivot to Pakistani ground reality ("Yeh saari pesh-raft toh taraqqi-yafta duniya mein ho rahi hai, lekin Pakistan mein kya ho raha hai?") and cite local bodies (PBS, PIDE, State Bank, HRCP, NEPRA, KWSB) with exact Rupee figures and neighborhood names (Orangi, Lyari, DHA, etc.).'
+          : 'Cite official global institutions (World Bank, IMF, OECD, SEC, Bureau records) with exact figures and real-world case study locations.'
+      }`
+    : ""
+}
+${
+  rc.sources.redditAndCitizenGroundVoices
+    ? `  * GRASSROOTS CITIZEN PULSE: Include 2–3 lived citizen experiences, street proverbs, or grassroots frustrations from active community discussions.`
+    : ""
+}
+`;
+
+  return `
+================================================================================
+=== THE 5-PART AGENCY RESEARCH DOSSIER & ARYAN ZERO-REPETITION LAW ===
+================================================================================
+${dossierDetails}
+
+[THE ZERO-REPETITION LAW & ANTI-PHILOSOPHICAL-FLUFF MANDATE (ARYAN STANDARD — NON-NEGOTIABLE)]:
+1. STRICT BAN ON SENTENCE PADDING & REPETITION:
+   - Never repeat the same idea in 4–5 differently worded sentences to stretch word count ("ek hi baat ko lamba karne ke liye wahi baat chaar-paanch jumlon mein mat bolo").
+   - Every 2–3 sentences MUST introduce a NEW named fact, date, book/parable reference, economic figure, neighborhood/city scene, institutional report, or causal mechanism!
+2. STRICT BAN ON GENERIC PHILOSOPHICAL FLUFF:
+   - Do NOT write generic, vague essay sentences ("script ke andar generic aur philosophical cheezein mat daalo"). Anchor every claim in concrete ground reality, institutional reports, and named case studies.
+================================================================================
+`.trim();
 };
 
 /**
@@ -528,9 +1262,99 @@ export const generateScriptWithGemini = async (
 
   const subordinateNotes = formatSubordinateUserNotes(customSystemPrompt);
 
+  // Harvest Stage 1 Pre-Script 5-Part Agency Research Dossier ONLY for Documentary / Investigative creators or when explicitly requested
+  let activeAgencyDossier: AgencyResearchDossier | undefined = config.agencyDossier;
+  const effectiveResearchConfig = config.researchConfig || DEFAULT_AGENCY_RESEARCH_CONFIG;
+  const isDocumentaryCreator = [
+    "raftar",
+    "dhruv",
+    "thynkwhy",
+    "thinkwhy",
+    "nitish",
+    "veritasium",
+    "analyticalexplainer"
+  ].some(k => cleanCreatorId.includes(k));
+
+  const hasAnyAgencyLayer =
+    effectiveResearchConfig.sources.booksAndHistoricalParables ||
+    effectiveResearchConfig.sources.localPakistaniAndRegionalData ||
+    effectiveResearchConfig.sources.redditAndCitizenGroundVoices ||
+    effectiveResearchConfig.sources.globalStudiesAndCounterArguments;
+
+  // Resolve active Question Mode & Topic-Specific Narrative Questions so Research Questions actually drive the script body
+  const activeQuestionMode = config.researchPlanOverrides?.questionMode || 'auto_topic';
+  const activeTopicQuestions: string[] =
+    activeQuestionMode === 'none'
+      ? []
+      : config.researchPlanOverrides?.questions && config.researchPlanOverrides.questions.length > 0
+      ? config.researchPlanOverrides.questions.filter(Boolean)
+      : buildSmartTopicQuestions({
+          topic: config.shortTopic || processedTopic,
+          brief: config.targetCriteria || processedTopic,
+          style: getResearchStyleByCreatorId(effectiveCreator.id),
+          region: effectiveResearchConfig.region || 'Pakistan'
+        });
+
+  // Mandatory Auto-Harvest in generateScriptWithGemini (Bug 4)
+  if (
+    !activeAgencyDossier &&
+    !config.dossier &&
+    (isDocumentaryCreator || hasAnyAgencyLayer)
+  ) {
+    onProgress?.(
+      0,
+      `Stage 1 Research Harvester: Grounding Books, Institutional Data & Citizen Voices...`,
+      12
+    );
+    try {
+      const dossierTimeoutController = new AbortController();
+      const dossierTimer = setTimeout(() => dossierTimeoutController.abort(), 18000);
+      activeAgencyDossier = await harvestAgencyResearchDossier({
+        shortTopic: config.shortTopic,
+        targetCriteria: config.targetCriteria,
+        topicOrScript: processedTopic,
+        creatorName: effectiveCreator.name,
+        creatorId: effectiveCreator.id,
+        researchConfig: effectiveResearchConfig,
+        questions: activeTopicQuestions,
+        apiKey,
+        signal: signal || dossierTimeoutController.signal
+      });
+      clearTimeout(dossierTimer);
+    } catch (dossierErr) {
+      console.warn("[ScriptService] Stage 1 Pre-Script Dossier Harvester fallback to inline grounding:", dossierErr);
+    }
+  }
+
+  const agencyDossierDirective = config.dossier
+    ? formatLockedDossierAndBeatPlanForPrompt(config.dossier, config.beatPlan)
+    : isDocumentaryCreator || activeAgencyDossier
+    ? formatAgencyDossierForPrompt(
+        activeAgencyDossier,
+        effectiveResearchConfig,
+        effectiveCreator.id || effectiveCreator.name,
+        config.shortTopic || processedTopic
+      )
+    : "";
+
+  const narrativeQuestionSpineDirective =
+    activeQuestionMode === 'none'
+      ? `
+    [QUESTION MODE: NO QUESTIONS — TOPIC-ONLY AUTO-FLOW]:
+    - The user selected 'No Questions (Topic Auto-Flow)'. Structure all body scenes 100% organically from <user_source>, Target Criteria, and Stage 1 Research Dossier without any predetermined question list.`
+      : `
+    [NARRATIVE QUESTION SPINE — ORGANICALLY ANSWER IN BODY SCENES (SCENES 2 TO N-1)]:
+    - HOW, WHEN & WHERE TO USE THESE QUESTIONS:
+      1. Scene 1 (Opening Hook) and the Final Scene (Closing Verdict) MUST strictly follow ${effectiveCreator.name}'s signature opening and closing laws.
+      2. Across the middle Body Scenes (Scenes 2 to N-1), organically answer each of the following topic-specific investigative questions using hard evidence, numbers, and causal mechanisms from the dossier:
+${activeTopicQuestions.map((q, idx) => `         Q${idx + 1}: ${q}`).join("\n")}
+      3. NEVER format the script as a robotic Q&A list or read the questions verbatim like an FAQ—weave their answers naturally into ${effectiveCreator.name}'s documentary narrative transitions so the script stays 100% cohesive.`;
+
   const textPrompt = `
     <user_source>
-    ${processedTopic}
+    ${config.shortTopic ? `WORKING TOPIC TITLE: ${config.shortTopic}\n` : ""}${
+      config.targetCriteria ? `TARGET ANGLE, CRITERIA & KEY POINTS TO COVER:\n${config.targetCriteria}\n\n` : ""
+    }${processedTopic}
     </user_source>
     ${templateBlock}
     PLATFORM: ${config.platform}
@@ -547,15 +1371,19 @@ export const generateScriptWithGemini = async (
     ${sponsorBlock}
     ${subordinateNotes}
     
-    ${buildAntiPlagiarismDirective(processedTopic)}
+    ${buildAntiPlagiarismDirective(config.shortTopic || processedTopic)}
+
+    ${agencyDossierDirective}
+    ${narrativeQuestionSpineDirective}
 
     [TWO-STAGE TOPIC LOGIC PLANNER -> CREATOR STYLE WRITER]
     Before writing a single spoken word of narration, execute this Two-Stage Separation:
-    1. PHASE A — TOPIC LOGIC BLUEPRINT (100% Derived from <user_source>):
-       - Extract the core thesis, timeline/dates, entities, cause-and-effect mechanisms, empirical claims, and counter-arguments strictly for the topic inside <user_source>.
+    1. PHASE A — TOPIC LOGIC BLUEPRINT (100% Derived from <user_source> & Stage 1 Agency Research Dossier):
+       - Extract the core thesis, timeline/dates, entities, cause-and-effect mechanisms, book/parable anchors, Pakistani/regional institutional figures, street-level neighborhoods, citizen voices, and empirical claims strictly for the topic inside <user_source>.
        - Do NOT import topics, dates, or subject matter from any reference transcript or creator bio example.
     2. PHASE B — CREATOR STYLE RENDERING (${effectiveCreator.name}):
        - Express the Phase A Topic Logic Blueprint through ${effectiveCreator.name}'s signature pacing, sentence length, transition connectors, and rhetorical cadence.
+       - OBEY THE ZERO-REPETITION LAW: Never repeat the same idea in 4-5 differently worded sentences to stretch word count. Every 2-3 sentences MUST introduce a new named fact, date, book reference, rupee figure, neighborhood scene, or causal mechanism from the Stage 1 Agency Research Dossier.
 
     [TASK — EXECUTE THE 4-STAGE SEQUENTIAL PIPELINE]
     Write a complete 10/10 script package in JSON format strictly obeying all 4 stages in your system instructions:
@@ -566,6 +1394,15 @@ export const generateScriptWithGemini = async (
       1. Scene 1 Hook (ZERO PLAGIARISM): NEVER copy opening sentences from reference transcripts. Open at [00:00] with a 100% original High-Stakes Statement of Fact + Inverse Contrast Framing anchored directly on the exact topic and timeframe inside <user_source> -> Immediate Proof Pivot + [CLAIM-1] -> Everyday Micro-Escalation + High-Stakes Reframe (` + "`activeThesis`" + `) -> Evidence-Medium Roadmap.
       2. Single Thread Law (Zero Bait-and-Switch Drift): Lock the Hook's central claim/question as ` + "`activeThesis`" + `. Every subsequent scene, [CLAIM-X], [INFOGRAPHIC-X], and analogy MUST directly prove or expand ` + "`activeThesis`" + `.
       3. Mandatory Causal Bridges & Dense Claim Verification Tags: Every body scene MUST open with an explicit Causal Connector. Every scene that states a numbered prediction, historical/geopolitical event, psychological study, economic statistic, or institutional debate MUST include an inline [CLAIM-X] or [PAPER-X] tag in 'audio' and a matching entry in 'claimsAndPapersRegistry'.
+    ${
+      cleanCreatorId.includes("thynkwhy") || cleanCreatorId.includes("thinkwhy")
+        ? `- CRITICAL THYNKWHY ANTI-POETRY & CONCRETE TRANSCRIPT START/END LAW:
+           * ABSOLUTE BAN ON POETRY: ThynkWhy (Muazzam Shah) is an investigative documentary filmmaker, NOT an Urdu poet. NEVER write rhyming poems, couplets, ghazals, or song-like verses (ہم قافیہ شاعری یا اشعار قطعی ممنوع ہیں). Sentences must NOT end in matching rhyming sounds!
+           * HOW TO START (Scene 1 [00:00 - 01:15]): Open with one of the 3 concrete formulas from the real transcripts: (1) A dated concrete incident/raid (e.g. Heera Mandi grand operation raid under curfew) tied 100% to "${config.shortTopic || processedTopic}", (2) A sensational screaming TV studio news quote contrasted with real citizens sipping evening chai on the street, or (3) Three real named people with their ages/cities whose lives collided with the issue. Close the hook with: "کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟" / "Kya aaj hum apne hissay ka kaam kar rahe hain? Aapka nahi pata, magar mere paas is sawal ka jawab hai."
+           * EVIDENCE CONNECTIONS IN THE BODY: Connect the thesis to real memoirs (like Qudratullah Shahab's 'Shahab Nama'), official reports, hospital statistics, and whistleblower confessions. Use brotherly spoken delivery: "boss", "yaar", "oh bhai", "danke ki chot par", "apne hissay ka kaam", "thoda sa ghour karo toh samajh aayega".
+           * HOW TO END (Closing Scene - NOT A POEM!): Close with a historical verdict on the predatory system or media deception, culminating in a piercing self-accountability question: "تاریخ کا ایک اٹل قانون ہے... جب کوئی قوم حقائق سے آنکھیں چرا کر اپنے ہی بنائے ہوئے جھوٹے بیانیے کے نشے میں مبتلا ہو جائے، تو اس کا غرور اسی طرح زمین پر آ گرتا ہے۔ سوچیے گا ضرور!" OR "کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟ فیصلہ آپ کے ہاتھ میں ہے!"`
+        : ""
+    }
     - NON-NEGOTIABLE LENGTH & SCENE DEPTH: Obey the CRITICAL DURATION, WORD-COUNT & SCENE-DEPTH ENFORCEMENT block in your system instructions. For 10-Minute Mini-Docs, generate 10–12 distinct scenes with 170–200 spoken words per scene (~2,000 spoken words total). For 20-Minute Full Documentaries, generate 18–22 distinct scenes with 225–250 spoken words per scene (~4,000 to 5,000 spoken words total). Never summarize or compress into a skeleton draft.
     - If bilingual dual-script mode is active (e.g. Urdu Roman + Script), the bracketed script is a mirror and does NOT count toward the required spoken words—write the full paragraph depth in the spoken track.
     - Never output raw bracketed placeholders such as [COUNTRY_X], [STAT_X], [DATE_A], or [YOUR TOPIC].
@@ -941,7 +1778,11 @@ export const generateScriptWithGemini = async (
     scientificGlossary,
     claimsAndPapersRegistry: finalClaimsRegistry,
     infographicsBlueprint,
-    groundingChunks: groundedSources
+    groundingChunks: [
+      ...(activeAgencyDossier?.groundedSources || []),
+      ...groundedSources
+    ],
+    agencyDossier: activeAgencyDossier
   };
 
   const baseScript: ScriptData = {

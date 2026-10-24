@@ -136,7 +136,7 @@ export interface InlineAudioToken {
  */
 export const parseAudioTextIntoTokens = (audioText: string): InlineAudioToken[] => {
   if (!audioText) return [];
-  const regex = /(\[\s*(?:SFX|BGM)\s*:[^\]]+\]|\[\s*(?:CLAIM|PAPER|INFOGRAPHIC)\s*-\s*\d+\s*\]|\[\s*(?:Pause|Beat|وقفہ)\s*\])/gi;
+  const regex = /(\[\s*(?:SFX|BGM)\s*:[^\]]+\]|\[\s*(?:CLAIM|PAPER|INFOGRAPHIC)\s*-\s*\d+\s*\]|\[\s*(?:Pause|Beat|وقفہ)\s*\]|\[\s*[FBQSD]\d+\s*\])/gi;
   const parts = audioText.split(regex);
   const tokens: InlineAudioToken[] = [];
 
@@ -176,6 +176,18 @@ export const parseAudioTextIntoTokens = (audioText: string): InlineAudioToken[] 
       const normalizedId = `${kind}-${num}`;
       tokens.push({
         type: kind === "CLAIM" ? "claim" : kind === "PAPER" ? "paper" : "infographic",
+        content: normalizedId,
+        rawTag: part
+      });
+      continue;
+    }
+    const cardMarkerMatch = part.match(/^\[\s*([FBQSD])(\d+)\s*\]$/i);
+    if (cardMarkerMatch) {
+      const prefix = cardMarkerMatch[1].toUpperCase();
+      const num = cardMarkerMatch[2];
+      const normalizedId = `${prefix}${num}`;
+      tokens.push({
+        type: prefix === 'B' ? 'paper' : 'claim',
         content: normalizedId,
         rawTag: part
       });

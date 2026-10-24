@@ -137,15 +137,104 @@ export const topicSuggestionSchema: Schema = {
   properties: {
     suggestions: {
       type: Type.ARRAY,
+      description: "Exactly 5 distinct, compelling video angles tailored to the user's topic and focus region.",
       items: {
         type: Type.OBJECT,
-        required: ["refinedTopic", "reason", "type"],
+        required: ["angleNumber", "angleCategory", "refinedTopic", "reason", "criteriaPoints", "type"],
         properties: {
-          refinedTopic: { type: Type.STRING },
-          reason: { type: Type.STRING },
+          angleNumber: { type: Type.INTEGER, description: "Angle index from 1 to 5" },
+          angleCategory: {
+            type: Type.STRING,
+            description: "The lens used for this angle, e.g., Who Profits | Effect on Ordinary People | Why the System Failed | Science & Evidence | History | Solutions | Future"
+          },
+          refinedTopic: { type: Type.STRING, description: "Sharp working title for this specific angle" },
+          reason: { type: Type.STRING, description: "1-line promise explaining what the viewer will learn or experience" },
+          criteriaPoints: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "Exactly 3 concrete key questions this angle will answer inside the video"
+          },
+          pakistaniOrGroundProofPreview: {
+            type: Type.STRING,
+            description: "Specific evidence types, reports, or examples to investigate for this angle"
+          },
           type: { type: Type.STRING, enum: ['Angle', 'Clarity', 'Depth'] }
         }
       }
+    }
+  }
+};
+
+export const agencyResearchDossierSchema: Schema = {
+  type: Type.OBJECT,
+  required: [
+    "topicSummary",
+    "bookAndParableAnchor",
+    "localInstitutionalData",
+    "grassrootsAndRedditVoices",
+    "globalScientificBenchmarks",
+    "nonRepetitiveFactPlan"
+  ],
+  properties: {
+    topicSummary: { type: Type.STRING },
+    bookAndParableAnchor: {
+      type: Type.ARRAY,
+      description: "Layer 1: Published books, historical commissions, memoirs, or literary parables (e.g., 1984, Alif Laila, Clever Hans Commission, Shahabnama, Broken Pillars of Democracy) with author and year.",
+      items: {
+        type: Type.OBJECT,
+        required: ["titleAndAuthor", "yearOrEra", "parableOrConceptSummary", "howToWeaveIntoScript"],
+        properties: {
+          titleAndAuthor: { type: Type.STRING },
+          yearOrEra: { type: Type.STRING },
+          parableOrConceptSummary: { type: Type.STRING },
+          howToWeaveIntoScript: { type: Type.STRING }
+        }
+      }
+    },
+    localInstitutionalData: {
+      type: Type.ARRAY,
+      description: "Layer 2: Hard Pakistani / Regional Institutional Data (PIDE, PBS, State Bank, P@SHA, HRCP, NEPRA, PCRWR, KWSB, Dawn, Express Tribune) + exact rupee figures + street-level city/neighborhood names.",
+      items: {
+        type: Type.OBJECT,
+        required: ["institutionOrReport", "keyStatisticOrPolicy", "rupeeOrEconomicBreakdown", "citiesAndNeighborhoods"],
+        properties: {
+          institutionOrReport: { type: Type.STRING },
+          keyStatisticOrPolicy: { type: Type.STRING },
+          rupeeOrEconomicBreakdown: { type: Type.STRING },
+          citiesAndNeighborhoods: { type: Type.STRING }
+        }
+      }
+    },
+    grassrootsAndRedditVoices: {
+      type: Type.ARRAY,
+      description: "Layer 3: Grassroots social listening from r/pakistan, r/karachi, r/lahore, citizen-uploaded Reels/complaints, and street proverbs (e.g., 'Yahan paani nahi, taalluqat chalte hain').",
+      items: {
+        type: Type.OBJECT,
+        required: ["sourceCommunityOrPlatform", "livedCitizenExperience", "streetProverbOrQuote"],
+        properties: {
+          sourceCommunityOrPlatform: { type: Type.STRING },
+          livedCitizenExperience: { type: Type.STRING },
+          streetProverbOrQuote: { type: Type.STRING }
+        }
+      }
+    },
+    globalScientificBenchmarks: {
+      type: Type.ARRAY,
+      description: "Layer 4: Peer-reviewed journals (Nature, The Lancet, MIT, Stanford, WHO) and international comparative benchmarks.",
+      items: {
+        type: Type.OBJECT,
+        required: ["studyOrInstitution", "findingAndMechanism", "comparativeLesson"],
+        properties: {
+          studyOrInstitution: { type: Type.STRING },
+          findingAndMechanism: { type: Type.STRING },
+          comparativeLesson: { type: Type.STRING }
+        }
+      }
+    },
+    nonRepetitiveFactPlan: {
+      type: Type.ARRAY,
+      description: "Zero-Repetition Law: Ordered scene-by-scene progression of distinct facts so the script never repeats the same point twice.",
+      items: { type: Type.STRING }
     }
   }
 };

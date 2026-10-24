@@ -20,50 +20,61 @@
  *             ├── 3. `urduTranscribe`     (Complete 100% Pure Urdu Nastaliq transcript)
  *             └── 4. `deepWordBank`       (Rhythmic parallel clauses, connectors & blended words)
  *
- * THYNKWHY SIGNATURE RHYTHMIC & BLENDED WORD-CRAFT (NON-CLINICAL):
- *   Unlike clinical science explainers, ThynkWhy (Muazzam Shah) does NOT rely on
- *   dry laboratory science jargon. Instead, ThynkWhy's signature power comes from:
- *   1. Parable / Allegory Cold Opens (تمثیلی آغاز): Opening with a vivid historical,
- *      moral, or human parable (e.g., the tiny sparrow carrying a drop of water over
- *      Nimrod's furnace in Babylon) that lands on a piercing question of personal
- *      responsibility ("کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟").
- *   2. Rhythmic, Rhyming & Parallel Clauses (ہم قافیہ و ہم آہنگ متوازی جملے):
- *      Marching parallel sentences where clauses rhyme or echo rhythmically:
- *      - "کہانیاں سنا کر زمانہ بدلنے آیا ہے، معاشرے کی منفی سوچ کو مثبت سوچ سے بدلنے آیا ہے۔ ہر ضروری معلومات آپ تک پہنچانے آیا ہے، سینہ بہ سینہ علم بڑھانے کا سلسلہ آپ سے جوڑنے آیا ہے۔"
- *      - "مگر آج یہ مقصد کہیں کھو گیا ہے، زندگی کا مقصد سو گیا ہے۔" ("Magar aaj yeh Why kahin kho gaya hai, zindagi ka maqsad so gaya hai.")
- *      - "بات ہوگی ڈنکے کی چوٹ پر، اور چوٹ لگنے پر تھوڑا درد تو ہوگا، مگر یقین مانیے مقصد درد پہنچانا نہیں بلکہ درد پر مرہم رکھنا اور معاشرہ سنوارنا ہے۔"
- *      - "وہ سوال جو آپ کو غلط راستے پر جانے سے روک دے؛ وہ سوال جو آپ کو حق کی راہ پر گامزن کر دے؛ وہ سوال جو آپ کی فکر بدل دے اور نیا راستہ دکھائے..."
- *   3. Brotherly Grounded Spoken Blend + Philosophical Gravitas:
- *      Blending literary Urdu depth with warm, grounded spoken cadence ("بڑا بھائی",
- *      "سینہ بہ سینہ", "ڈنکے کی چوٹ پر", "کٹھ پتلی", "کیوں کی کھوج / Unraveling the Why",
- *      and in Roman Urdu: "yaar", "boss", "oh bhai", "danke ki chot par").
+ * THYNKWHY SIGNATURE INVESTIGATIVE STORYTELLING & PHILOSOPHICAL GRAVITAS:
+ *   ThynkWhy (Muazzam Shah) is an investigative documentary filmmaker, media critic,
+ *   and philosophical explainer — HE IS NOT A POET.
+ *   CRITICAL ANTI-POETRY & ANTI-RHYME LAW:
+ *   - NEVER write rhyming poetry, couplets, ghazals, or song-like verses (ہم قافیہ شاعری یا اشعار قطعی ممنوع ہیں).
+ *   - Sentences must NOT end in rhyming couplets.
+ *   - Instead, ThynkWhy's signature power comes from:
+ *   1. Concrete Story Starting (3 Proven Formulas from Real Transcripts):
+ *      - Formula A (Dated Incident / Historical Raid): Open inside a concrete dated scene (e.g., General Zia-ul-Haq's grand raid in Heera Mandi, or Babylon's furnace fire) and pivot: "Pehle yeh kothon par hota tha, ab har ghar mein sirf aik click ki doori par aa chuka hai!"
+ *      - Formula B (Sensational Media Quote vs. Street Reality): Quote sensational TV studio screaming anchors, then contrast with real citizens sipping evening chai on the street ("Magar ain usi lamhay asal sadkon par log itminaan se chai pee rahe the!").
+ *      - Formula C (Three Named Interconnected Real-Life Case Studies): Introduce 3 real people across different cities (e.g., 16-year-old student Kajol in Chandigarh hospital, 21-year-old Sajid, Daphne in Vegas) and ask: "In teenon mein mushtarka kya hai? Aik common system!"
+ *      - Every hook ends with a piercing question of personal agency: "Kya aaj hum apne hissay ka kaam kar rahe hain?"
+ *   2. Grounded Evidence & Memoir Connections in the Body:
+ *      - Cite real books/memoirs (e.g. Qudratullah Shahab's 'Shahab Nama'), real historical dates, hospital reports, and institutional data.
+ *   3. Brotherly Spoken Delivery with High Moral Urgency:
+ *      - Blending literary Urdu depth with warm spoken brotherly cadence:
+ *        "yaar", "boss", "oh bhai", "danke ki chot par", "apne hissay ka kaam", "thoda sa ghour karo toh samajh aayega".
+ *   4. Concrete Ending Verdict & Awakening Question (NOT A POEM!):
+ *      - Close with a historical verdict on the predatory system or media deception, culminating in a piercing self-accountability question ("Sochiye ga zaroor!", "Kya aaj hum apne hissay ka kaam kar rahe hain?").
  *
  * ENGINE EXECUTION ORDER & STRICT NON-VERBATIM RULE:
  *   Step 1: Read `/creators/thynkwhy.ts` (ThynkWhy Bio File — read-only)
  *   Step 2: Read `src/data/creatorTranscripts/thynkwhy.js` (this file)
  *   Step 3: Filter to the selected Genre Tag & Target Language (`urduTranscribe`, `hinglishTranscribe`, or `englishTranscribe`)
- *   Step 4: ANALYZE RHYTHMIC WORD-BLENDING, PARALLEL CLAUSE CADENCE & PARABLE STRUCTURE ONLY — NEVER COPY EXACT LINES AS-IS!
- *           You may borrow individual spoken connectors and rhythmic cadence patterns,
+ *   Step 4: ANALYZE CONCRETE STARTING INCIDENTS, EVIDENCE CONNECTIONS, AND ENDING VERDICTS ONLY — NEVER WRITE RHYMING POETRY!
+ *           You may borrow individual spoken connectors and conversational cadence,
  *           and MUST construct 100% original sentences tailored strictly to the user's topic.
  * ============================================================================
  */
 
 export const THYNKWHY_STEP_BY_STEP_SCRIPT_ALGORITHM = `
-### THYNKWHY 6-STEP RHYTHMIC & PHILOSOPHICAL DOCUMENTARY ALGORITHM (EXCLUSIVE TO THYNKWHY)
+### THYNKWHY 6-STEP INVESTIGATIVE & PHILOSOPHICAL DOCUMENTARY ALGORITHM (EXCLUSIVE TO THYNKWHY)
 Follow this exact step-by-step algorithm whenever ThynkWhy is selected:
-- **STEP 1 (Read ThynkWhy Bio + Active Genre Transcripts in Target Language):** Read \`/creators/thynkwhy.ts\` first, then absorb the rhythmic parallel phrasing, parable storytelling, and blended word cadence from the selected ThynkWhy Genre (\`urduTranscribe\`, \`hinglishTranscribe\`, or \`englishTranscribe\`). NEVER copy exact sentences or past video stories verbatim.
-- **STEP 2 (Non-Clinical Rhythmic Word-Blending Rule — Zero Dry Lab Jargon):** Unlike science-heavy creators, do NOT stuff ThynkWhy scripts with dry clinical/laboratory jargon. Instead, build emotional and intellectual impact through **rhythmic, matching, and parallel clauses (ہم قافیہ و متوازی جملے)** where consecutive clauses echo the same cadence or rhyme (e.g., "...زمانہ بدلنے آیا ہے، منفی سوچ کو مثبت سوچ سے بدلنے آیا ہے", "...مقصد کہیں کھو گیا ہے، زندگی کا مقصد سو گیا ہے", "بات ہوگی ڈنکے کی چوٹ پر... مقصد درد پہنچانا نہیں بلکہ درد پر مرہم رکھنا ہے").
-- **STEP 3 (Parable / Allegory or Mirror Cold Open — Scene 1 [00:00]):** Open with a gripping historical parable, moral allegory, or vivid human scene directly tied to the user's topic, culminating in a piercing self-accountability question ("کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟" / "Kya aaj hum apne hissay ka kaam kar rahe hain?").
-- **STEP 4 (Unraveling the "Why" — کیوں کی کھوج):** Peel back the superficial narrative ("میں ٹی وی چینلز والی ڈرامے بازی نہیں کروں گا۔ بولنا تو بعد کا مرحلہ ہے، اس سے پہلے سوچنا ضروری ہے کہ بولنا کیا ہے!") and examine the deeper philosophical, historical, biographical, or societal "Why" behind the topic with verified claims (\`[CLAIM-1]\`, \`[CLAIM-2]\`).
-- **STEP 5 (Historical / Biographical / Societal Parallels + Visual Anchor):** Connect the topic to real-world historical trajectories, iconic figures, or everyday human realities (\`[INFOGRAPHIC-1]\`) using vivid metaphors (like the childhood screwdriver & toys, the teleprompter puppet, or nations rising from ashes) rather than dry textbook definitions.
-- **STEP 6 (Crescendo of Parallel Questions & Awakening Closing):** Close with a rhythmic crescendo of "Why / Sawal" clauses ("وہ سوال جو آپ کو غلط راستے پر جانے سے روک دے؛ وہ سوال جو آپ کی فکر بدل دے اور نیا راستہ دکھائے...") that leaves the viewer with deep self-accountability (خود احتسابی).
+- **STEP 1 (Strict Anti-Poetry & Anti-Rhyme Law — ZERO Poems or Ghazals):** ThynkWhy (Muazzam Shah) is an investigative documentary filmmaker, NOT an Urdu poet. NEVER write rhyming poetry, couplets, or rhyming stanzas (ہم قافیہ شاعری یا اشعار قطعی ممنوع ہیں). Sentences must NOT end in matching rhyming words like a poem.
+- **STEP 2 (Choose 1 of 3 Proven Starting Formulas — Scene 1 Hook [00:00 - 01:15]):**
+  * *Formula A (Dated Concrete Incident / Historical Raid):* Open inside a vivid, dated scene with real action, setting, and people (e.g., a police raid under curfew, an ancient furnace in Babylon, or a dated flashpoint) tied 100% to the topic, then pivot to modern screen reality ("پہلے رقاصائیں کوٹھوں پر محفلیں سجاتی تھیں، اب کوٹھے صرف ایک کلک کے فاصلے پر آ چکے ہیں!").
+  * *Formula B (Sensational Media Quote Contrast):* Open with sensational TV studio screaming anchor quotes, then contrast with calm street-level reality ("خوشی کی بات یہ ہے کہ... یہ آوازیں ٹی وی اسٹوڈیوز کی تھیں... مگر عین اسی لمحے اصل سڑکوں پر لوگ اطمینان سے چائے پی رہے تھے!").
+  * *Formula C (Three Named Interconnected Characters):* Introduce 3 real people of different ages/cities affected by this system (e.g., 16-year-old student Kajol in Chandigarh hospital, 21-year-old Sajid in hospital, Daphne in Vegas) and ask what common system connects them.
+  * *Hook Culmination Question:* Close the hook with an inescapable question of personal agency: "کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟" / "Kya aaj hum apne hissay ka kaam kar rahe hain? Aapka nahi pata, magar mere paas is sawal ka jawab hai."
+- **STEP 3 (Unraveling the 'Why' & Biting Media/System Critique — Scene 2):** Peel back the superficial drama ("میں ٹی وی چینلز والی ڈرامے بازی نہیں کروں گا۔ بولنا تو بعد کا مرحلہ ہے، اس سے پہلے سوچنا ضروری ہے کہ بولنا کیا ہے! بات ہوگی ڈنکے کی چوٹ پر، اور چوٹ لگنے پر تھوڑا درد تو ہوگا، مگر مقصد درد پہنچانا نہیں بلکہ درد پر مرہم رکھنا ہے!").
+- **STEP 4 (Grounded Evidence, Real Books & Institutional Truth — Scene 3):** Connect the thesis to real memoirs (like Qudratullah Shahab's 'Shahab Nama'), official audit data, hospital statistics, or whistleblower insider confessions. Use brotherly spoken Urdu/Roman Urdu ("boss", "yaar", "oh bhai", "thoda sa ghour karo toh samajh aayega").
+- **STEP 5 (Targeting the Real Culprits — Scene 4):** Surge vocal aggression (8.5–9/10) to target the predatory system, corporate algorithms, or Rs. 25–40 lakh salary newsroom puppets reading teleprompters.
+- **STEP 6 (Closing Verdict & Deep Self-Accountability — Scene 5 [NOT A POEM!]):** Close with a historical verdict and a piercing question of awakening: "تاریخ کا ایک اٹل قانون ہے... جب کوئی قوم حقائق سے آنکھیں چرا کر اپنے ہی بنائے ہوئے جھوٹے بیانیے کے نشے میں مبتلا ہو جائے، تو اس کا غرور اسی طرح آسمان سے زمین پر آ گرتا ہے۔ سوال یہ ہے کہ کیا ہم اس سیاسی دوکانداری کو کبھی سمجھ پائیں گے؟ سوچیے گا ضرور!" OR "کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟ فیصلہ آپ کے ہاتھ میں ہے!"
 `.trim();
 
 export const THYNKWHY_UNIVERSAL_SPOKEN_WORD_BANK = {
   urduConnectorsAndWords: [
     "کیا آج ہم اپنے حصے کا کام کر رہے ہیں؟",
+    "وہ پردہ جو بے حیائی سے بچاتا ہے، عزت دلواتا ہے، لوگوں کی نظروں سے محفوظ بناتا ہے، عورت کو اس کی پہچان دلواتا ہے — وہی پردہ آج معاشرے میں کہیں کھویا ہوا نظر آتا ہے",
     "کہانیاں سنا کر زمانہ بدلنے آیا ہے، معاشرے کی منفی سوچ کو مثبت سوچ سے بدلنے آیا ہے",
     "سینہ بہ سینہ علم بڑھانے کا سلسلہ آپ سے جوڑنے آیا ہے",
+    "ماضی کی حقیقت اور حال کی پریشانی دکھا کر آپ کا مستقبل محفوظ بنانے آیا ہے",
+    "پہلے رقاصائیں کوٹھوں پر محفلیں سجاتی تھیں، اب کوٹھے صرف ایک کلک کے فاصلے پر آ چکے ہیں",
+    "نہ پڑھائی کی محنت، نہ اچھے نمبر لانے کا دباؤ، اور نہ نوکری کے لیے ڈگری کی محتاجی!",
+    "امریکہ کی ڈیفنی کو راتوں رات کروڑ پتی بنانے والا، بھارت کی معصوم کاجول کو اس خوفناک موڑ پر لانے والا، اور پاکستان کے نوجوان ساجد کی زندگی برباد کرنے والا صرف ایک مشترکہ نظام ہے",
     "بولنا تو بعد کا مرحلہ ہے، اس سے پہلے سوچنا ضروری ہے کہ بولنا کیا ہے!",
     "بات ہوگی ڈنکے کی چوٹ پر، اور چوٹ لگنے پر تھوڑا درد تو ہوگا",
     "مقصد درد پہنچانا نہیں بلکہ درد پر مرہم رکھنا اور معاشرہ سنوارنا ہے",
@@ -71,29 +82,37 @@ export const THYNKWHY_UNIVERSAL_SPOKEN_WORD_BANK = {
     "غور کریں تو سمجھ آئے گا کہ",
     "مگر آج یہ مقصد کہیں کھو گیا ہے، زندگی کا مقصد سو گیا ہے",
     "ہم بیرونی حالات پر تو روتے ہیں لیکن خود سے سوال نہیں کرتے",
+    "جب کوئی قوم حقائق سے آنکھیں چرا کر اپنے ہی بنائے ہوئے جھوٹے بیانیے کے نشے میں مبتلا ہو جائے، تو اس کا غرور اسی طرح آسمان سے زمین پر آ گرتا ہے",
     "حالات چاہے کتنے ہی کٹھن کیوں نہ ہوں، اگر آپ کو معلوم ہے کہ آپ جو کر رہے ہیں وہ 'کیوں' کر رہے ہیں، تو یقین مانیے منزل خود راستہ دے گی",
     "یہی وہ 'کیوں' ہے جو انسان کی عقل پر پڑے تالوں کو کھولتا ہے",
     "ضروری ہے کہ آپ کے اندر ایک سچی سوچ پیدا ہو، کیونکہ سوچ ہی سوال کو جنم دیتی ہے",
-    "وہ سوال جو آپ کی فکر بدل دے اور نیا راستہ دکھائے"
+    "وہ سوال جو آپ کو غلط راستے پر جانے سے روک دے؛ وہ سوال جو آپ کو حق کی راہ پر گامزن کر دے؛ وہ سوال جو آپ کی فکر بدل دے اور نیا راستہ دکھائے؛ وہ سوال جو معاشرے میں حقیقی انقلاب لے آئے اور جس سے ظلم کانپ اٹھے!"
   ],
   hinglishConnectorsAndWords: [
     "Kya aaj hum apne hissay ka kaam kar rahe hain?",
+    "Woh parda jo be-hayai se bachata hai, izzat dilwata hai, logon ki nazron se mehfooz banata hai, aurat ko uski pehchan dilwata hai — wahi parda aaj muashray mein kahin khoya hua nazar aata hai",
     "Kahaniyan suna kar zamana badalne aaya hai, muashray ki negativity ko positivity se replace karne aaya hai",
     "Seena-ba-seena ilm badhane ka silsila aapse jodne aaya hai",
+    "Pehle raqasa kothon par mehfilein sajaya karti thi, ab kothey sirf aik click ki doori par hain!",
+    "Na padhai par focus karne ki zaroorat, na ache marks ka pressure, aur na naukri ke liye degree ki pareshani!",
+    "America ki Daphne ko raaton-raat ameer banane wala, Bharat ki Kajol ko underage mein is khaufnaak stage par laane wala, aur Pakistan ke Sajid ko hospital pohanchane wala sirf aik common system hai",
     "Oh bhai, bolna agla step hai! Us se pehle soch lo ke bolna kya hai!",
     "Baat hogi danke ki chot par, aur chot lagne par thoda dard toh hoga yaar",
     "Maqsad dard pohanchana nahi, dard par marham rakhna hai, muashra sanwarna hai",
     "Thoda sa ghour karo toh samajh aayega",
     "Magar aaj yeh Why kahin kho gaya hai, zindagi ka maqsad so gaya hai",
     "Hum roz shaam ki chai ke saath khabrein padh kar kehte hain... magar khud ko badalne ka nahi sochte!",
+    "Jab koi qaum haqeeqat se aankhein chura kar apne hi banaye hue jhootay narrative ke nashe mein mubtala ho jaye, toh uska ghuroor isi tarah aasman se zameen par aa girta hai",
     "Agar aapke paas aik strong Why hai, toh believe me 'HOW' kitna bhi mushkil kyun na ho, aap manzil tak pohanch hi jayenge",
     "Yehi Why aapke zehen ki girhein kholega!",
     "Zaroori hai ke aapke andar aik soch paida ho, kyunke soch hi sawal ko janam deti hai!",
-    "Sawal woh jo aapko ghalat raah par jaane se rokk de; sawal woh jo sach ki raah dikhaye"
+    "Sawal woh jo aapko ghalat raah par jaane se rokk de; sawal woh jo sach ki raah dikhaye; sawal woh jo muashray mein inqilaab laye aur zalim ko lalkar de!"
   ],
   englishConnectorsAndWords: [
     "This forces an inescapable question: in an era of collective crisis, are we fulfilling our portion?",
+    "That moral shield which protects dignity, commands respect, guards against exploitation, and defines human identity — that very shield now seems lost in contemporary society",
     "To transform societal consciousness through investigative storytelling, and to replace institutional cynicism with constructive clarity",
+    "Historically, courtesans held court in private salons; today, the modern brothel sits exactly one tap away on a touchscreen",
     "This platform does not exist to catalog systemic grievances; it exists to construct pragmatic methodologies for overcoming them",
     "Mere speech is secondary; the prerequisite of responsible speech is deep, rigorous contemplation",
     "He who has a why to live can bear almost any how",
